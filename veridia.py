@@ -2068,10 +2068,9 @@ def generatePrompt(combined_data, slab):
             - ED Civil: Sewer Line, Storm Line, GSB, WMM, Stamp Concrete, Saucer drain, Kerb Stone
             - Structure Work: (no activities specified)
             Asite:
-            - MEP: Wall Conducting, Plumbing Works, POP & Gypsum Plaster, Wiring & Switch Socket, Slab Conducting, Electrical Cable
-            - Interior Finishing: Door/Window Frame, Waterproofing - Sunken, Wall Tile, Floor Tile, Door/Window Shutter
-            - Structure Work: Shuttering, Reinforcement
-            - ED Civil: Sewer Line, Rain Water/Storm Line, Granular Sub-base, WMM, Saucer drain/Paver block, Kerb Stone, Concreting
+            - MEP: Wall Conducting, Plumbing Works, POP & Gypsum Plaster, Wiring & Switch Socket, Slab Conducting, Electrical Cable,Concreting
+            - Interior Finishing: Door/Window Frame, Waterproofing - Sunken, Wall Tiling, Floor Tiling, Door/Window Shutter
+            - ED Civil: Sewer Line, Rain Water/Storm Line, Granular Sub-base, WMM, Saucer drain/Paver block, Kerb Stone
 
             Slab:
             - Get total greens of Each Tower
@@ -2091,7 +2090,7 @@ def generatePrompt(combined_data, slab):
                         {{"Activity Name": "Min. count of UP-First Fix and CP-First Fix", "Total": 0}},
                         {{"Activity Name": "C-Gypsum and POP Punning", "Total": 0}},
                         {{"Activity Name": "EL-Second Fix", "Total": 0}},
-                        {{"Activity Name": "No. of Slab cast", "Total": 0}},
+                        {{"Activity Name": "Concreating", "Total": 0}},
                         {{"Activity Name": "Electrical", "Total": 0}}
                       ]
                     }},
@@ -2137,7 +2136,8 @@ def generatePrompt(combined_data, slab):
                         {{"Activity Name": "POP & Gypsum Plaster", "Total": 0}},
                         {{"Activity Name": "Wiring & Switch Socket", "Total": 0}},
                         {{"Activity Name": "Slab Conducting", "Total": 0}},
-                        {{"Activity Name": "Electrical Cable", "Total": 0}}
+                        {{"Activity Name": "Electrical Cable", "Total": 0}},
+                        {{"Activity Name": "Concreating", "Total": 0}}
                       ]
                     }},
                     {{
@@ -2145,18 +2145,12 @@ def generatePrompt(combined_data, slab):
                       "Activities": [
                         {{"Activity Name": "Door/Window Frame", "Total": 0}},
                         {{"Activity Name": "Waterproofing - Sunken", "Total": 0}},
-                        {{"Activity Name": "Wall Tile", "Total": 0}},
-                        {{"Activity Name": "Floor Tile", "Total": 0}},
+                        {{"Activity Name": "Wall Tiling", "Total": 0}},
+                        {{"Activity Name": "Floor Tiling", "Total": 0}},
                         {{"Activity Name": "Door/Window Shutter", "Total": 0}}
                       ]
                     }},
-                    {{
-                      "Category": "Structure Work",
-                      "Activities": [
-                        {{"Activity Name": "Shuttering", "Total": 0}},
-                        {{"Activity Name": "Reinforcement", "Total": 0}}
-                      ]
-                    }},
+                
                     {{
                       "Category": "ED Civil",
                       "Activities": [
@@ -2992,10 +2986,10 @@ def generate_consolidated_Checklist_excel(ai_data):
         # Find existing "Slab Conducting" entries and update them with slab data
         for key in list(normalized_cos_data.keys()):
             tower, activity, category = key
-            if activity == "Slab Conducting" and tower in slab_data_dict:
+            if activity == "Concreating" and tower in slab_data_dict:
                 # Update the completed work count with slab data
                 normalized_cos_data[key]["count"] = slab_data_dict[tower]
-                logger.info(f"Updated Slab Conducting for {tower} with slab data: {slab_data_dict[tower]}")
+                logger.info(f"Updated Concreating for {tower} with slab data: {slab_data_dict[tower]}")
         
         # If there are slab data entries that don't have corresponding COS/Asite entries, 
         # we need to find where "Slab Conducting" exists in Asite data to determine the correct category
@@ -3004,20 +2998,20 @@ def generate_consolidated_Checklist_excel(ai_data):
             existing_key = None
             for key in asite_data_dict.keys():
                 tower, activity, category = key
-                if tower == tower_name and activity == "Slab Conducting":
+                if tower == tower_name and activity == "Concreating":
                     existing_key = key
                     break
             
             # If found in Asite data but not in normalized COS data, add it
             if existing_key and existing_key not in normalized_cos_data:
                 normalized_cos_data[existing_key] = {"count": slab_count, "open_missing": None}
-                logger.info(f"Added new Slab Conducting entry for {tower_name} with slab data: {slab_count}")
+                logger.info(f"Added new Concreating entry for {tower_name} with slab data: {slab_count}")
             # If not found anywhere, add it to Structure Works as default
             elif not existing_key:
-                new_key = (tower_name, "Slab Conducting", "Structure Works")
+                new_key = (tower_name, "Concreating", "Structure Works")
                 if new_key not in normalized_cos_data:
                     normalized_cos_data[new_key] = {"count": slab_count, "open_missing": None}
-                    logger.info(f"Created new Slab Conducting entry for {tower_name} in Structure Works: {slab_count}")
+                    logger.info(f"Created new Concreating entry for {tower_name} in Structure Works: {slab_count}")
 
         # Combine normalized COS (including slab) and Asite data
         all_keys = set(normalized_cos_data.keys()).union(set(asite_data_dict.keys()))
@@ -3040,6 +3034,7 @@ def generate_consolidated_Checklist_excel(ai_data):
                 "Category": category,
                 "Activity Name": activity_name,
                 "Completed Work*(Count of Flat)": cos_count,
+                "In progress": asite_count,
                 "Closed checklist against completed work": asite_count,
                 "Open/Missing check list": open_missing_count
             })
@@ -3097,6 +3092,7 @@ def generate_consolidated_Checklist_excel(ai_data):
                 headers = [
                     "ACTIVITY NAME",
                     "Completed Work*(Count of Flat)",
+                    "In progress",
                     "Closed checklist against completed work",
                     "Open/Missing check list"
                 ]
@@ -3113,6 +3109,7 @@ def generate_consolidated_Checklist_excel(ai_data):
                 for _, row in cat_group.iterrows():
                     worksheet.cell(row=current_row, column=6).value = row["Activity Name"]
                     worksheet.cell(row=current_row, column=7).value = row["Completed Work*(Count of Flat)"]
+                    worksheet.cell(row=current_row, column=8).value = row["In progress"]
                     worksheet.cell(row=current_row, column=8).value = row["Closed checklist against completed work"]
                     worksheet.cell(row=current_row, column=9).value = row["Open/Missing check list"]
                     for col in range(6, 10):  # Columns F to I
