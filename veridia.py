@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import requests
+from veridia1 import *
 import json 
 import urllib.parse
 import urllib3
@@ -1802,7 +1803,6 @@ def process_file(file_stream, filename):
 
                 # Ensure critical columns are present
                 if 'Activity Name' not in selected_columns or 'Actual Finish' not in selected_columns:
-                    st.error(f"Critical columns missing in {sheet_name}. Found: {list(selected_columns.keys())}, Required: Activity Name, Actual Finish")
                     logger.error(f"Critical columns missing in {sheet_name}. Found: {selected_columns}")
                     return (None, None), (None, None)
 
@@ -2063,14 +2063,13 @@ def generatePrompt(combined_data, slab):
 
             Categories and Activities:
             COS:
-            - MEP: EL-First Fix, UP-First Fix, CP-First Fix, Min. count of UP-First Fix and CP-First Fix, C-Gypsum and POP Punning, EL-Second Fix, No. of Slab cast, Electrical
+            - MEP: EL-First Fix, UP-First Fix, CP-First Fix, Min. count of UP-First Fix and CP-First Fix, C-Gypsum and POP Punning, EL-Second Fix, Concreting, Electrical
             - Interior Finishing: Installation of doors, Waterproofing Works, Wall Tiling, Floor Tiling
             - ED Civil: Sewer Line, Storm Line, GSB, WMM, Stamp Concrete, Saucer drain, Kerb Stone
-            - Structure Work: (no activities specified)
             Asite:
-            - MEP: Wall Conducting, Plumbing Works, POP & Gypsum Plaster, Wiring & Switch Socket, Slab Conducting, Electrical Cable,Concreting
+            - MEP: Wall Conducting, Plumbing Works, POP & Gypsum Plaster, Wiring & Switch Socket, Slab Conducting, Electrical Cable, Concreting
             - Interior Finishing: Door/Window Frame, Waterproofing - Sunken, Wall Tiling, Floor Tiling, Door/Window Shutter
-            - ED Civil: Sewer Line, Rain Water/Storm Line, Granular Sub-base, WMM, Saucer drain/Paver block, Kerb Stone
+            - ED Civil: Sewer Line, Rain Water/Storm Line, Granular Sub-base, WMM, Saucer drain/Paver block, Kerb Stone, Concreting
 
             Slab:
             - Get total greens of Each Tower
@@ -2090,7 +2089,7 @@ def generatePrompt(combined_data, slab):
                         {{"Activity Name": "Min. count of UP-First Fix and CP-First Fix", "Total": 0}},
                         {{"Activity Name": "C-Gypsum and POP Punning", "Total": 0}},
                         {{"Activity Name": "EL-Second Fix", "Total": 0}},
-                        {{"Activity Name": "Concreating", "Total": 0}},
+                        {{"Activity Name": "Concreting", "Total": 0}},
                         {{"Activity Name": "Electrical", "Total": 0}}
                       ]
                     }},
@@ -2102,10 +2101,6 @@ def generatePrompt(combined_data, slab):
                         {{"Activity Name": "Wall Tiling", "Total": 0}},
                         {{"Activity Name": "Floor Tiling", "Total": 0}}
                       ]
-                    }},
-                    {{
-                      "Category": "Structure Work",
-                      "Activities": []
                     }},
                     {{
                       "Category": "ED Civil",
@@ -2137,7 +2132,7 @@ def generatePrompt(combined_data, slab):
                         {{"Activity Name": "Wiring & Switch Socket", "Total": 0}},
                         {{"Activity Name": "Slab Conducting", "Total": 0}},
                         {{"Activity Name": "Electrical Cable", "Total": 0}},
-                        {{"Activity Name": "Concreating", "Total": 0}}
+                        {{"Activity Name": "Concreting", "Total": 0}}
                       ]
                     }},
                     {{
@@ -2150,7 +2145,6 @@ def generatePrompt(combined_data, slab):
                         {{"Activity Name": "Door/Window Shutter", "Total": 0}}
                       ]
                     }},
-                
                     {{
                       "Category": "ED Civil",
                       "Activities": [
@@ -2159,8 +2153,7 @@ def generatePrompt(combined_data, slab):
                         {{"Activity Name": "Granular Sub-base", "Total": 0}},
                         {{"Activity Name": "WMM", "Total": 0}},
                         {{"Activity Name": "Saucer drain/Paver block", "Total": 0}},
-                        {{"Activity Name": "Kerb Stone", "Total": 0}},
-                        {{"Activity Name": "Concreting", "Total": 0}}
+                        {{"Activity Name": "Kerb Stone", "Total": 0}}
                       ]
                     }}
                   ]
@@ -2422,7 +2415,7 @@ def display_activity_count():
             "COS": {
                 "MEP": [
                     "EL-First Fix", "UP-First Fix", "CP-First Fix", "Min. count of UP-First Fix and CP-First Fix",
-                    "C-Gypsum and POP Punning", "EL-Second Fix", "No. of Slab cast", "Electrical"
+                    "C-Gypsum and POP Punning", "EL-Second Fix", "Concreting", "Electrical"
                 ],
                 "Interior Finishing": [
                     "Installation of doors", "Waterproofing Works", "Wall Tiling", "Floor Tiling"
@@ -2434,13 +2427,10 @@ def display_activity_count():
             "Asite": {
                 "MEP": [
                     "Wall Conducting", "Plumbing Works", "POP & Gypsum Plaster", "Wiring & Switch Socket",
-                    "Slab Conducting", "Electrical Cable"
+                    "Slab Conducting", "Electrical Cable", "Concreting"
                 ],
                 "Interior Finishing": [
                     "Door/Window Frame", "Waterproofing - Sunken", "Wall Tile", "Floor Tile", "Door/Window Shutter"
-                ],
-                "Structure Work": [
-                    "Shuttering", "Reinforcement"
                 ],
                 "ED Civil": [
                     "Sewer Line", "Rain Water/Storm Line", "Granular Sub-base", "WMM",
@@ -2787,11 +2777,31 @@ def generate_consolidated_Checklist_excel(ai_data):
     try:
         # Parse AI data if it's a string
         if isinstance(ai_data, str):
+            logger.info("Parsing ai_data from string")
             ai_data = json.loads(ai_data)
         
         if not isinstance(ai_data, dict) or "COS" not in ai_data or "Asite" not in ai_data:
+            logger.error("Invalid AI data format: missing 'COS' or 'Asite' keys")
             st.error("❌ Invalid AI data format for Excel generation.")
             return None
+
+        logger.info(f"AI data keys: {list(ai_data.keys())}")
+        logger.info(f"COS data: {ai_data.get('COS', [])}")
+        logger.info(f"Asite data: {ai_data.get('Asite', [])}")
+
+        # Normalize slab_data structure
+        if isinstance(ai_data, dict):
+            if "Slab" in ai_data:
+                slab_counts = ai_data["Slab"]
+                logger.info("Slab data found with 'Slab' key.")
+            else:
+                slab_counts = ai_data
+                logger.info("Slab data provided directly without 'Slab' key.")
+        else:
+            logger.warning("Invalid slab data format. Expected a dictionary. Proceeding without slab data.")
+            slab_counts = {}
+        
+        logger.info(f"Slab counts: {slab_counts}")
 
         # Define the COS to Asite activity name mapping
         cos_to_asite_mapping = {
@@ -2803,7 +2813,6 @@ def generate_consolidated_Checklist_excel(ai_data):
             "Wall Tile": "Wall Tile",
             "Floor Tile": "Floor Tile",
             "EL-Second Fix": "Wiring & Switch Socket",
-            "No. of Slab cast": "No. of Slab cast",
             "Sewer Line": "Sewer Line",
             "Line Storm Line": "Rain Water/Storm",
             "GSB": "Granular Sub-base",
@@ -2811,46 +2820,42 @@ def generate_consolidated_Checklist_excel(ai_data):
             "Saucer drain": "Saucer drain/Paver block",
             "Kerb Stone": "Kerb Stone",
             "Electrical": "Electrical Cable",
-            "Stamp Concrete": "Concreting"
+            "Concreting": "Concreting"
         }
 
-        # Activities that map to "No. of Slab cast" in Asite
-        slab_cast_activities = ["Shuttering", "Reinforcement", "Slab conducting", "Concreting"]
+        # Activities that map to "Concreting" in Asite
+        slab_cast_activities = ["Shuttering", "Reinforcement", "Concreting"]  
 
         # Initialize lists to store data
         consolidated_rows = []
 
-        # Process Slab data if present in AI output
+        # Process Slab data
         slab_data_dict = {}
-        if "Slab" in ai_data:
-            slab_data = ai_data["Slab"]
-            for tower_name, total_count in slab_data.items():
-                if tower_name != "Tower Name" and tower_name != "Total":  # Skip header and total rows
-                    original_tower_name = tower_name  # Keep original for debugging
+        for tower_name, total_count in slab_counts.items():
+            if tower_name != "Tower Name" and tower_name != "Total":  # Skip header and total rows
+                original_tower_name = tower_name  # Keep original for debugging
+                
+                # Normalize tower name but preserve A/B suffixes
+                if "Tower" in tower_name:
+                    tower_name = tower_name.replace("Tower ", "T").replace("(", "").replace(")", "")
+                
+                logger.info(f"Processing Slab Tower: {original_tower_name} -> {tower_name}")
+                
+                count = int(total_count) if pd.notna(total_count) else 0
+                
+                # Special handling for Tower 4 - split slab data between T4A and T4B
+                if tower_name == "T4":
+                    half_count = count // 2
+                    remainder = count % 2
                     
-                    # Normalize tower name but preserve A/B suffixes
-                    if "Tower" in tower_name:
-                        tower_name = tower_name.replace("Tower ", "T").replace("(", "").replace(")", "")
-                        # Handle special cases like "Tower 4A" -> "T4A", "Tower 4B" -> "T4B"
-                        # This preserves the A/B distinction
+                    slab_data_dict["T4A"] = half_count + remainder
+                    slab_data_dict["T4B"] = half_count
                     
-                    logger.info(f"Processing Slab Tower: {original_tower_name} -> {tower_name}")
-                    
-                    count = int(total_count) if pd.notna(total_count) else 0
-                    
-                    # Special handling for Tower 4 - split slab data between T4A and T4B
-                    if tower_name == "T4":
-                        # Split the count between T4A and T4B (assuming equal distribution)
-                        half_count = count // 2
-                        remainder = count % 2
-                        
-                        slab_data_dict["T4A"] = half_count + remainder
-                        slab_data_dict["T4B"] = half_count
-                        
-                        logger.info(f"Split T4 Slab data: T4A={half_count + remainder}, T4B={half_count}")
-                    else:
-                        # Store slab conducting data - we'll determine category later from existing data
-                        slab_data_dict[tower_name] = count
+                    logger.info(f"Split T4 Slab data: T4A={half_count + remainder}, T4B={half_count}")
+                else:
+                    slab_data_dict[tower_name] = count
+
+        logger.info(f"Processed slab_data_dict: {slab_data_dict}")
 
         # Process COS data
         cos_data_dict = {}
@@ -2858,11 +2863,8 @@ def generate_consolidated_Checklist_excel(ai_data):
             tower_name = tower_data.get("Tower", "Unknown Tower")
             original_tower_name = tower_name  # Keep original for debugging
             
-            # Normalize tower name but preserve A/B suffixes
             if "Tower" in tower_name:
                 tower_name = tower_name.replace("Tower ", "T").replace("(", "").replace(")", "")
-                # Handle special cases like "Tower 4A" -> "T4A", "Tower 4B" -> "T4B"
-                # This preserves the A/B distinction
             
             logger.info(f"Processing COS Tower: {original_tower_name} -> {tower_name}")
             
@@ -2879,19 +2881,15 @@ def generate_consolidated_Checklist_excel(ai_data):
                 for activity in category_data.get("Activities", []):
                     activity_name = activity.get("Activity Name", "Unknown Activity")
                     count = int(activity.get("Total", 0)) if pd.notna(activity.get("Total")) else 0
-                    open_missing = activity.get("OpenMissingOverride", None)  # Check for override
+                    open_missing = activity.get("OpenMissingOverride", None)
                     
-                    # Special handling for Tower 4 - split data between T4A and T4B
                     if tower_name == "T4":
-                        # Split the count between T4A and T4B (assuming equal distribution)
                         half_count = count // 2
                         remainder = count % 2
                         
-                        # Add to T4A
                         key_4a = ("T4A", activity_name, category)
                         cos_data_dict[key_4a] = {"count": half_count + remainder, "open_missing": open_missing}
                         
-                        # Add to T4B
                         key_4b = ("T4B", activity_name, category)
                         cos_data_dict[key_4b] = {"count": half_count, "open_missing": open_missing}
                         
@@ -2900,17 +2898,16 @@ def generate_consolidated_Checklist_excel(ai_data):
                         key = (tower_name, activity_name, category)
                         cos_data_dict[key] = {"count": count, "open_missing": open_missing}
 
+        logger.info(f"COS data dict: {cos_data_dict}")
+
         # Process Asite data
         asite_data_dict = {}
         for tower_data in ai_data.get("Asite", []):
             tower_name = tower_data.get("Tower", "Unknown Tower")
             original_tower_name = tower_name  # Keep original for debugging
             
-            # Normalize tower name but preserve A/B suffixes
             if "Tower" in tower_name:
                 tower_name = tower_name.replace("Tower ", "T").replace("(", "").replace(")", "")
-                # Handle special cases like "Tower 4A" -> "T4A", "Tower 4B" -> "T4B"
-                # This preserves the A/B distinction
             
             logger.info(f"Processing Asite Tower: {original_tower_name} -> {tower_name}")
             
@@ -2927,19 +2924,15 @@ def generate_consolidated_Checklist_excel(ai_data):
                 for activity in category_data.get("Activities", []):
                     activity_name = activity.get("Activity Name", "Unknown Activity")
                     count = int(activity.get("Total", 0)) if pd.notna(activity.get("Total")) else 0
-                    open_missing = activity.get("OpenMissingOverride", None)  # Check for override
+                    open_missing = activity.get("OpenMissingOverride", None)
                     
-                    # Special handling for Tower 4 - split data between T4A and T4B
                     if tower_name == "T4":
-                        # Split the count between T4A and T4B (assuming equal distribution)
                         half_count = count // 2
                         remainder = count % 2
                         
-                        # Add to T4A
                         key_4a = ("T4A", activity_name, category)
                         asite_data_dict[key_4a] = {"count": half_count + remainder, "open_missing": open_missing}
                         
-                        # Add to T4B
                         key_4b = ("T4B", activity_name, category)
                         asite_data_dict[key_4b] = {"count": half_count, "open_missing": open_missing}
                         
@@ -2948,19 +2941,24 @@ def generate_consolidated_Checklist_excel(ai_data):
                         key = (tower_name, activity_name, category)
                         asite_data_dict[key] = {"count": count, "open_missing": open_missing}
 
+        logger.info(f"Asite data dict: {asite_data_dict}")
+
         # Normalize COS data to use Asite activity names
         normalized_cos_data = {}
         for (tower, cos_activity, category), data in cos_data_dict.items():
             count = data["count"]
             open_missing = data["open_missing"]
-            if cos_activity in slab_cast_activities:
-                asite_activity = "No. of Slab cast"
+            
+            # Map slab-related activities to "Concreting"
+            if cos_activity in slab_cast_activities or cos_activity == "Slab Conducting":
+                asite_activity = "Concreting"
                 key = (tower, asite_activity, category)
                 existing_data = normalized_cos_data.get(key, {"count": 0, "open_missing": None})
                 normalized_cos_data[key] = {
                     "count": existing_data["count"] + count,
                     "open_missing": open_missing if open_missing is not None else existing_data["open_missing"]
                 }
+                logger.info(f"Mapped {cos_activity} to Concreting for {tower} in {category}")
             elif cos_activity in ["UP-First Fix", "CP-First Fix"]:
                 asite_activity = "Plumbing Works"
                 key = (tower, asite_activity, category)
@@ -2982,68 +2980,106 @@ def generate_consolidated_Checklist_excel(ai_data):
                 key = (tower, cos_activity, category)
                 normalized_cos_data[key] = {"count": count, "open_missing": open_missing}
 
-        # Merge slab data with normalized COS data
-        # Find existing "Slab Conducting" entries and update them with slab data
-        for key in list(normalized_cos_data.keys()):
-            tower, activity, category = key
-            if activity == "Concreating" and tower in slab_data_dict:
-                # Update the completed work count with slab data
-                normalized_cos_data[key]["count"] = slab_data_dict[tower]
-                logger.info(f"Updated Concreating for {tower} with slab data: {slab_data_dict[tower]}")
+        logger.info(f"Normalized COS data before slab merge: {normalized_cos_data}")
+
+        # **CRITICAL UPDATE**: Merge slab data with normalized COS data for "Concreting" activities
+        # This ensures slab_data_dict counts are properly mapped to "Concreting" in Completed Work column
         
-        # If there are slab data entries that don't have corresponding COS/Asite entries, 
-        # we need to find where "Slab Conducting" exists in Asite data to determine the correct category
+        # First, identify all categories that have "Concreting" activities from Asite data
+        concreting_categories = {}
+        for (tower, activity, category) in asite_data_dict.keys():
+            if activity == "Concreting":
+                if tower not in concreting_categories:
+                    concreting_categories[tower] = []
+                if category not in concreting_categories[tower]:
+                    concreting_categories[tower].append(category)
+        
+        logger.info(f"Found Concreting categories: {concreting_categories}")
+        
+        # Update/Create Concreting entries with slab data for each tower and relevant category
         for tower_name, slab_count in slab_data_dict.items():
-            # Look for existing "Slab Conducting" in any category for this tower
-            existing_key = None
-            for key in asite_data_dict.keys():
-                tower, activity, category = key
-                if tower == tower_name and activity == "Concreating":
-                    existing_key = key
-                    break
+            # Get categories for this tower, default to common categories if not found
+            categories = concreting_categories.get(tower_name, ["MEP Works", "Structure Works"])
             
-            # If found in Asite data but not in normalized COS data, add it
-            if existing_key and existing_key not in normalized_cos_data:
-                normalized_cos_data[existing_key] = {"count": slab_count, "open_missing": None}
-                logger.info(f"Added new Concreating entry for {tower_name} with slab data: {slab_count}")
-            # If not found anywhere, add it to Structure Works as default
-            elif not existing_key:
-                new_key = (tower_name, "Concreating", "Structure Works")
-                if new_key not in normalized_cos_data:
-                    normalized_cos_data[new_key] = {"count": slab_count, "open_missing": None}
-                    logger.info(f"Created new Concreating entry for {tower_name} in Structure Works: {slab_count}")
+            for category in categories:
+                key = (tower_name, "Concreting", category)
+                
+                # FORCE UPDATE: Set the slab count as the completed work count for Concreting
+                # This will override any existing count for Concreting with the actual slab count
+                normalized_cos_data[key] = {
+                    "count": slab_count,  # This will show in "Completed Work*(Count of Flat)" column
+                    "open_missing": normalized_cos_data.get(key, {}).get("open_missing", None)
+                }
+                logger.info(f"UPDATED: Set Concreting for {tower_name} in {category} with slab count: {slab_count}")
+
+        # Also ensure any tower in slab_data_dict that doesn't have existing Concreting entries gets them
+        for tower_name, slab_count in slab_data_dict.items():
+            # Check if this tower has any Concreting entries
+            has_concreting = any(key[0] == tower_name and key[1] == "Concreting" for key in normalized_cos_data.keys())
+            
+            if not has_concreting:
+                # Create Concreting entry with default category
+                default_category = "Structure Works"  # or determine based on your business logic
+                key = (tower_name, "Concreting", default_category)
+                normalized_cos_data[key] = {
+                    "count": slab_count,
+                    "open_missing": None
+                }
+                logger.info(f"CREATED: New Concreting entry for {tower_name} in {default_category} with slab count: {slab_count}")
+
+        logger.info(f"After merging slab data, normalized COS data: {normalized_cos_data}")
 
         # Combine normalized COS (including slab) and Asite data
         all_keys = set(normalized_cos_data.keys()).union(set(asite_data_dict.keys()))
         for key in all_keys:
             tower_name, activity_name, category = key
+            # Skip "No. of Slab cast" to avoid displaying it (since we're now using "Concreting")
+            if activity_name == "No. of Slab cast":
+                continue
+                
             cos_data = normalized_cos_data.get(key, {"count": 0, "open_missing": None})
             asite_data = asite_data_dict.get(key, {"count": 0, "open_missing": None})
             cos_count = cos_data["count"]
             asite_count = asite_data["count"]
             
-            # Use override if provided, otherwise calculate absolute difference
+            # Special logging for Concreting activities to debug
+            if activity_name == "Concreting":
+                logger.info(f"CONCRETING DEBUG - Tower: {tower_name}, Category: {category}, COS Count: {cos_count}, Asite Count: {asite_count}")
+            
             open_missing_override = cos_data["open_missing"] if cos_data["open_missing"] is not None else asite_data["open_missing"]
             if open_missing_override is not None:
                 open_missing_count = open_missing_override
             else:
-                open_missing_count = abs(cos_count - asite_count)  # Absolute difference for positive values
-            
+                open_missing_count = abs(cos_count - asite_count)
+            in_progress_count = 0
             consolidated_rows.append({
                 "Tower": tower_name,
                 "Category": category,
                 "Activity Name": activity_name,
-                "Completed Work*(Count of Flat)": cos_count,
-                "In progress": asite_count,
+                "Completed Work*(Count of Flat)": cos_count, 
+                "In Progress Work*(Count of Flat)":in_progress_count,
                 "Closed checklist against completed work": asite_count,
                 "Open/Missing check list": open_missing_count
             })
 
+        logger.info(f"Consolidated rows: {consolidated_rows}")
+
         # Create DataFrame
         df = pd.DataFrame(consolidated_rows)
         if df.empty:
+            logger.warning("DataFrame is empty after processing. No data available to generate consolidated checklist.")
             st.warning("No data available to generate consolidated checklist.")
-            return None
+            # Create a minimal Excel file with a message
+            output = BytesIO()
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Consolidated Checklist"
+            worksheet.cell(row=1, column=1).value = "No data available to generate consolidated checklist."
+            workbook.save(output)
+            output.seek(0)
+            return output
+
+        logger.info(f"DataFrame created with {len(df)} rows")
 
         # Sort by Tower, Category, and Activity Name for consistency
         df.sort_values(by=["Tower", "Category", "Activity Name"], inplace=True)
@@ -3065,39 +3101,33 @@ def generate_consolidated_Checklist_excel(ai_data):
         )
         center_alignment = Alignment(horizontal='center')
 
-        # Create the consolidated sheet
-        worksheet = workbook.create_sheet(title="Consolidated Checklist")
+        # Create Sheet 1: Consolidated Checklist
+        worksheet1 = workbook.create_sheet(title="Consolidated Checklist")
         current_row = 1
 
-        # Group by Tower
         grouped_by_tower = df.groupby('Tower')
 
         for tower, tower_group in grouped_by_tower:
-            # Write Tower name in column F
-            worksheet.cell(row=current_row, column=6).value = tower
-            worksheet.cell(row=current_row, column=6).font = header_font
+            worksheet1.cell(row=current_row, column=6).value = tower
+            worksheet1.cell(row=current_row, column=6).font = header_font
             current_row += 1
 
-            # Group Categories within this Tower
             grouped_by_category = tower_group.groupby('Category')
 
-            # Process each Category vertically
             for category, cat_group in grouped_by_category:
-                # Write section header
-                worksheet.cell(row=current_row, column=6).value = f"{tower} May Checklist Status - {category}"
-                worksheet.cell(row=current_row, column=6).font = category_font
+                worksheet1.cell(row=current_row, column=6).value = f"{tower} June Checklist Status - {category}"
+                worksheet1.cell(row=current_row, column=6).font = category_font
                 current_row += 1
 
-                # Write table headers
                 headers = [
                     "ACTIVITY NAME",
                     "Completed Work*(Count of Flat)",
-                    "In progress",
+                    "In Progress Work*(Count of Flat)",
                     "Closed checklist against completed work",
                     "Open/Missing check list"
                 ]
-                for col, header in enumerate(headers, start=6):  # Start at column F (6)
-                    cell = worksheet.cell(row=current_row, column=col)
+                for col, header in enumerate(headers, start=6):
+                    cell = worksheet1.cell(row=current_row, column=col)
                     cell.value = header
                     cell.font = header_font
                     cell.border = border
@@ -3105,34 +3135,32 @@ def generate_consolidated_Checklist_excel(ai_data):
 
                 current_row += 1
 
-                # Write activity data
                 for _, row in cat_group.iterrows():
-                    worksheet.cell(row=current_row, column=6).value = row["Activity Name"]
-                    worksheet.cell(row=current_row, column=7).value = row["Completed Work*(Count of Flat)"]
-                    worksheet.cell(row=current_row, column=8).value = row["In progress"]
-                    worksheet.cell(row=current_row, column=8).value = row["Closed checklist against completed work"]
-                    worksheet.cell(row=current_row, column=9).value = row["Open/Missing check list"]
-                    for col in range(6, 10):  # Columns F to I
-                        cell = worksheet.cell(row=current_row, column=col)
+                    worksheet1.cell(row=current_row, column=6).value = row["Activity Name"]
+                    worksheet1.cell(row=current_row, column=7).value = row["Completed Work*(Count of Flat)"]
+                    worksheet1.cell(row=current_row, column=8).value = row["In Progress Work*(Count of Flat)"]
+                    worksheet1.cell(row=current_row, column=9).value = row["Closed checklist against completed work"]
+                    worksheet1.cell(row=current_row, column=10).value = row["Open/Missing check list"]
+                    for col in range(6, 10):
+                        cell = worksheet1.cell(row=current_row, column=col)
                         cell.border = border
                         cell.alignment = center_alignment
                     current_row += 1
 
-                # Write total pending checklist
                 total_open_missing = cat_group["Open/Missing check list"].sum()
-                worksheet.cell(row=current_row, column=6).value = "TOTAL pending checklist MAY"
-                worksheet.cell(row=current_row, column=9).value = total_open_missing
-                for col in range(6, 10):  # Columns F to I
-                    cell = worksheet.cell(row=current_row, column=col)
+                worksheet1.cell(row=current_row, column=6).value = "TOTAL pending checklist June"
+                worksheet1.cell(row=current_row, column=9).value = total_open_missing
+                for col in range(6, 10):
+                    cell = worksheet1.cell(row=current_row, column=col)
                     cell.font = category_font
                     cell.border = border
                     cell.alignment = center_alignment
                 current_row += 1
 
-            current_row += 1  # Add a blank row between Tower sections
+            current_row += 1
 
-        # Adjust column widths
-        for col in worksheet.columns:
+        # Adjust column widths for Sheet 1
+        for col in worksheet1.columns:
             max_length = 0
             column = col[0].column_letter
             for cell in col:
@@ -3142,23 +3170,112 @@ def generate_consolidated_Checklist_excel(ai_data):
                 except:
                     pass
             adjusted_width = (max_length + 2)
-            worksheet.column_dimensions[column].width = adjusted_width
+            worksheet1.column_dimensions[column].width = adjusted_width
+
+        # Create Sheet 2: Summary Checklist
+        worksheet2 = workbook.create_sheet(title="Checklist June")
+        current_row = 1
+
+        # Write title
+        worksheet2.cell(row=current_row, column=1).value = "Checklist: June"
+        worksheet2.cell(row=current_row, column=1).font = header_font
+        current_row += 1
+
+        # Write headers
+        headers = [
+            "Site",
+            "Total of Missing & Open Checklist-Civil",
+            "Total of Missing & Open Checklist-MEP",
+            "TOTAL"
+        ]
+        for col, header in enumerate(headers, start=1):
+            cell = worksheet2.cell(row=current_row, column=col)
+            cell.value = header
+            cell.font = header_font
+            cell.border = border
+            cell.alignment = center_alignment
+        current_row += 1
+
+        # Categorize towers into Civil and MEP
+        def map_category_to_type(category):
+            if category in ["Civil Works", "Structure Works"]:
+                return "Civil"
+            elif category in ["MEP Works", "Interior Finishing Works"]:
+                return "MEP"
+            elif category == "External Development":
+                return "Civil"  # Assuming External Development is Civil
+            else:
+                return "Civil"  # Default to Civil if unknown
+
+        # Aggregate open/missing counts by tower and type (Civil/MEP)
+        summary_data = {}
+        for _, row in df.iterrows():
+            tower = row["Tower"]
+            category = row["Category"]
+            open_missing = row["Open/Missing check list"]
+            
+            # Convert tower name to display format (e.g., "T4A" -> "Veridia-Tower 04 A")
+            if "External Development" in category:
+                site_name = f"External Development-{tower}"
+            else:
+                tower_num = tower[1:]  # Remove 'T' prefix
+                if len(tower_num) == 1:
+                    tower_num = f"0{tower_num}"  # Pad single digits (e.g., "T2" -> "02")
+                site_name = f"Veridia-Tower {tower_num}"
+
+            type_ = map_category_to_type(category)
+            
+            if site_name not in summary_data:
+                summary_data[site_name] = {"Civil": 0, "MEP": 0}
+            
+            summary_data[site_name][type_] += open_missing
+
+        logger.info(f"Summary data for Sheet 2: {summary_data}")
+
+        # Write summary data to Sheet 2
+        for site_name, counts in sorted(summary_data.items()):
+            civil_count = counts["Civil"]
+            mep_count = counts["MEP"]
+            total_count = civil_count + mep_count
+            
+            worksheet2.cell(row=current_row, column=1).value = site_name
+            worksheet2.cell(row=current_row, column=2).value = civil_count
+            worksheet2.cell(row=current_row, column=3).value = mep_count
+            worksheet2.cell(row=current_row, column=4).value = total_count
+            
+            for col in range(1, 5):
+                cell = worksheet2.cell(row=current_row, column=col)
+                cell.border = border
+                cell.alignment = center_alignment
+            current_row += 1
+
+        # Adjust column widths for Sheet 2
+        for col in worksheet2.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            worksheet2.column_dimensions[column].width = adjusted_width
 
         # Save the workbook to the BytesIO buffer
         workbook.save(output)
         output.seek(0)
 
+        logger.info("Excel file generated successfully")
         return output
 
     except Exception as e:
-        logger.error(f"Error generating consolidated Excel: {str(e)}")
+        logger.error(f"Error generating consolidated Excel: {str(e)}", exc_info=True)
         st.error(f"❌ Error generating Excel file: {str(e)}")
         return None
 
-
-
 # Streamlit UI - Modified Button Code
-st.sidebar.title("🔒 Asite Initialization")
+st.sidebar.title("🔒Asite Initialization")
 email = st.sidebar.text_input("Email", "impwatson@gadieltechnologies.com", key="email_input")
 password = st.sidebar.text_input("Password", "Srihari@790$", type="password", key="password_input")
 
@@ -3175,8 +3292,6 @@ if st.sidebar.button("Initialize and Fetch Data"):
         st.sidebar.error(f"Initialization and data fetching failed: {str(e)}")
     finally:
         loop.close()
-
-
 
 # Combined function to handle both analysis and activity count display
 def run_analysis_and_display():
@@ -3195,9 +3310,18 @@ def run_analysis_and_display():
         st.success("Activity counts displayed successfully!")
 
         st.write("Generating consolidated checklist Excel file...")
+        # Defensive initialization for ai_response
         if 'ai_response' not in st.session_state or not st.session_state.ai_response:
-            st.error("❌ No AI data available to generate Excel. Please ensure analysis ran successfully.")
-            return
+            st.session_state.ai_response = {"COS": [], "Asite": []}
+            st.warning("AI response not found. Initialized to empty data.")
+
+        # Ensure GetSlabReport is called to populate slabreport
+        GetSlabReport()
+
+        # Defensive initialization for slabreport
+        if 'slabreport' not in st.session_state:
+            st.session_state.slabreport = {}
+            st.warning("Slab report data not found. Initialized to empty dictionary.")
 
         with st.spinner("Generating Excel file... This may take a moment."):
             excel_file = generate_consolidated_Checklist_excel(st.session_state.ai_response)
@@ -3223,7 +3347,6 @@ def run_analysis_and_display():
     except Exception as e:
         st.error(f"Error during analysis, display, or Excel generation: {str(e)}")
         logging.error(f"Error during analysis, display, or Excel generation: {str(e)}")
-
 
 st.sidebar.title("📊 Status Analysis")
 
