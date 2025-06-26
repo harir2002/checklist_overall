@@ -2435,7 +2435,7 @@ def run_analysis_and_display():
         # Step 7: Handle download
         if excel_file:
             timestamp = pd.Timestamp.now(tz='Asia/Kolkata').strftime('%Y%m%d_%H%M')
-            file_name = f"Consolidated_Checklist_WaveCityClub_{timestamp}.xlsx"
+            file_name = f"Consolidated_Checklist_EWS_LIG_{timestamp}.xlsx"
             
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
