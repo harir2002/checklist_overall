@@ -58,6 +58,37 @@ if 'structure_analysis' not in st.session_state:
 LOGIN_URL = "https://dms.asite.com/apilogin/"
 IAM_TOKEN_URL = "https://iam.cloud.ibm.com/identity/token"
 
+
+import time
+from functools import wraps
+import streamlit as st
+
+def function_timer(show_args=False):
+    """Decorator to measure and display function execution time"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Start timer
+            start_time = time.time()
+            
+            # Call the original function
+            result = func(*args, **kwargs)
+            
+            # Calculate duration
+            duration = time.time() - start_time
+            
+            # Display timing info
+            func_name = func.__name__.replace('_', ' ').title()
+            arg_info = ""
+            if show_args and args:
+                arg_info = f" with args: {args[1:]}"  # Skip self if present
+            
+            st.info(f"⏱️ {func_name}{arg_info} executed in {duration:.2f} seconds")
+            
+            return result
+        return wrapper
+    return decorator
+
 # Login Function
 async def login_to_asite(email, password):
     headers = {"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"}
@@ -123,6 +154,7 @@ def initialize_cos_client():
         raise
 
 # Fetch Workspace ID
+@function_timer()
 async def GetWorkspaceID():
     url = "https://dmsak.asite.com/api/workspace/workspacelist"
     headers = {
@@ -144,6 +176,7 @@ async def GetWorkspaceID():
         raise
 
 # Fetch Project IDs
+@function_timer()
 async def GetProjectId():
     url = f"https://adoddleak.asite.com/commonapi/qaplan/getQualityPlanList;searchCriteria={{'criteria': [{{'field': 'planCreationDate','operator': 6,'values': ['11-Mar-2025']}}], 'projectId': {str(st.session_state.workspaceid)}, 'recordLimit': 1000, 'recordStart': 1}}"
     headers = {
@@ -174,6 +207,7 @@ async def fetch_data(session, url, headers):
             raise Exception(f"Error fetching data: {response.status} - {await response.text()}")
 
 # Fetch All Structure Data
+@function_timer()
 async def GetAllDatas():
     record_limit = 1000
     headers = {'Cookie': f'ASessionID={st.session_state.sessionid}'}
@@ -225,6 +259,7 @@ async def GetAllDatas():
     return eden_structure
 
 # Fetch Activity Data
+@function_timer()
 async def Get_Activity():
     record_limit = 1000
     headers = {
@@ -266,6 +301,7 @@ async def Get_Activity():
     return structure_activity_data
 
 # Fetch Location/Module Data
+@function_timer()
 async def Get_Location():
     record_limit = 1000
     headers = {
@@ -323,6 +359,7 @@ async def Get_Location():
     return structure_df
 
 # Process individual chunk
+@function_timer()
 def process_chunk(chunk, chunk_idx, dataset_name, location_df):
     logger.info(f"Starting thread for {dataset_name} Chunk {chunk_idx + 1}")
     generated_text = format_chunk_locally(chunk, chunk_idx, len(chunk), dataset_name, location_df)
@@ -330,6 +367,7 @@ def process_chunk(chunk, chunk_idx, dataset_name, location_df):
     return generated_text, chunk_idx
 
 # Process data with manual counting
+@function_timer()
 def process_manually(analysis_df, total, dataset_name, chunk_size=1000, max_workers=4):
     if analysis_df.empty:
         st.warning(f"No completed activities found for {dataset_name}.")
@@ -463,6 +501,8 @@ def process_manually(analysis_df, total, dataset_name, chunk_size=1000, max_work
     return combined_output
 
 # Local formatting function for manual counting
+
+@function_timer()
 def format_chunk_locally(chunk, chunk_idx, chunk_size, dataset_name, location_df):
     towers_data = {}
     
@@ -497,6 +537,7 @@ def format_chunk_locally(chunk, chunk_idx, chunk_size, dataset_name, location_df
     output += f"Total Completed Activities: {total_activities}"
     return output
 
+@function_timer()
 def process_data(df, activity_df, location_df, dataset_name):
     completed = df[df['statusName'] == 'Completed']
     if completed.empty:
@@ -601,6 +642,7 @@ def process_data(df, activity_df, location_df, dataset_name):
     return analysis, total_completed
 
 # Main analysis function for Eden Structure
+@function_timer()
 def AnalyzeStatusManually(email=None, password=None):
     start_time = time.time()
 
@@ -658,6 +700,7 @@ def AnalyzeStatusManually(email=None, password=None):
     end_time = time.time()
     st.write(f"Total execution time: {end_time - start_time:.2f} seconds")
 
+@function_timer()
 def get_cos_files():
     try:
         cos_client = initialize_cos_client()
@@ -749,6 +792,7 @@ if 'ai_response' not in st.session_state:
     st.session_state.ai_response = {}  # Initialize as empty dictionary
 
 # Process Excel files for Towers 4, 5, 6, 7
+@function_timer()
 def process_file(file_stream, filename):
     try:
         workbook = openpyxl.load_workbook(file_stream)
@@ -834,6 +878,7 @@ def process_file(file_stream, filename):
         return [(None, None)]
 
 # Function to get access token for WatsonX API
+@function_timer()
 def get_access_token(api_key):
     try:
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -852,6 +897,7 @@ def get_access_token(api_key):
         return None
 
 # WatsonX Prompt Generation
+@function_timer()
 def generatePrompt(json_datas):
     try:
         if isinstance(json_datas, pd.DataFrame):
@@ -996,6 +1042,7 @@ def generatePrompt(json_datas):
         return generate_fallback_totals(json_datas)
 
 # Fallback Total Calculation
+@function_timer()
 def generate_fallback_totals(count_table):
     try:
         if not isinstance(count_table, pd.DataFrame):
@@ -1100,6 +1147,7 @@ def generate_fallback_totals(count_table):
         ], indent=2)
 
 # Extract Totals from AI Data
+@function_timer()
 def getTotal(ai_data):
     try:
         if isinstance(ai_data, str):
@@ -1127,6 +1175,7 @@ def getTotal(ai_data):
         return [0] * len(st.session_state.get('sheduledf', pd.DataFrame()).index)
 
 # Function to handle activity count display
+@function_timer()
 def display_activity_count():
     specific_activities = [
         "EL-First Fix", "Installation of doors", "Waterproofing Works",
@@ -1329,6 +1378,7 @@ def display_activity_count():
 
 
 # Combined function for Initialize and Fetch Data
+@function_timer()
 async def initialize_and_fetch_data(email, password):
     with st.spinner("Starting initialization and data fetching process..."):
         # Step 1: Login
@@ -1454,6 +1504,7 @@ async def initialize_and_fetch_data(email, password):
     return True
 
 
+@function_timer()
 def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
     try:
         # Define categories and activities (based on the image and existing code)
@@ -1651,6 +1702,7 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
 
 
 # Combined function to handle analysis and display
+@function_timer(show_args=True)
 def run_analysis_and_display():
     try:
         st.write("Running status analysis...")
@@ -1693,7 +1745,7 @@ def run_analysis_and_display():
         
         if excel_file:
             timestamp = pd.Timestamp.now(tz='Asia/Kolkata').strftime('%Y%m%d_%H%M')
-            file_name = f"Consolidated_Checklist_Veridia_{timestamp}.xlsx"
+            file_name = f"Consolidated_Checklist_eden_{timestamp}.xlsx"
             
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
