@@ -1,3 +1,5 @@
+
+
 import streamlit as st
 import requests
 import json
@@ -59,43 +61,10 @@ LOGIN_URL = "https://dms.asite.com/apilogin/"
 IAM_TOKEN_URL = "https://iam.cloud.ibm.com/identity/token"
 
 
-import time
-from functools import wraps
-import streamlit as st
-
-def function_timer(show_args=False):
-    """Decorator to measure and display function execution time"""
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            # Start timer
-            start_time = time.time()
-            
-            # Call the original function
-            result = func(*args, **kwargs)
-            
-            # Calculate duration
-            duration = time.time() - start_time
-            
-            # Display timing info
-            func_name = func.__name__.replace('_', ' ').title()
-            arg_info = ""
-            if show_args and args:
-                arg_info = f" with args: {args[1:]}"  # Skip self if present
-            
-            st.info(f"⏱️ {func_name}{arg_info} executed in {duration:.2f} seconds")
-            
-            return result
-        return wrapper
-    return decorator
-
 if "slabreport" not in st.session_state:
     st.session_state.slabreport = {}
 
-
-
 # Login Function
-@function_timer()
 async def login_to_asite(email, password):
     headers = {"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"}
     payload = {"emailId": email, "password": password}
@@ -116,7 +85,6 @@ async def login_to_asite(email, password):
     return None
 
 # Function to generate access token
-@function_timer()
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=10, max=60))
 def get_access_token(API_KEY):
     headers = {"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"}
@@ -137,7 +105,6 @@ def get_access_token(API_KEY):
         return None
 
 # Initialize COS client
-@function_timer()
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=4, max=10))
 def initialize_cos_client():
     try:
@@ -262,7 +229,6 @@ async def GetAllDatas():
     return EWS_LIG_structure
 
 # Fetch Activity Data
-@function_timer()
 async def Get_Activity():
     record_limit = 1000
     headers = {
@@ -304,7 +270,6 @@ async def Get_Activity():
     return structure_activity_data
 
 # Fetch Location/Module Data
-@function_timer()
 async def Get_Location():
     record_limit = 1000
     headers = {
@@ -362,7 +327,6 @@ async def Get_Location():
     return structure_df
 
 # Process individual chunk
-@function_timer()
 def process_chunk(chunk, chunk_idx, dataset_name, location_df):
     logger.info(f"Starting thread for {dataset_name} Chunk {chunk_idx + 1}")
     generated_text = format_chunk_locally(chunk, chunk_idx, len(chunk), dataset_name, location_df)
@@ -370,7 +334,6 @@ def process_chunk(chunk, chunk_idx, dataset_name, location_df):
     return generated_text, chunk_idx
 
 # Process data with manual counting
-@function_timer()
 def process_manually(analysis_df, total, dataset_name, chunk_size=1000, max_workers=4):
     if analysis_df.empty:
         st.warning(f"No completed activities found for {dataset_name}.")
@@ -504,7 +467,6 @@ def process_manually(analysis_df, total, dataset_name, chunk_size=1000, max_work
     return combined_output
 
 # Local formatting function for manual counting
-@function_timer()
 def format_chunk_locally(chunk, chunk_idx, chunk_size, dataset_name, location_df):
     towers_data = {}
     
@@ -658,7 +620,6 @@ def get_full_path(location_id, parent_child_dict, name_dict):
     logger.debug(f"Full path for location_id {location_id}: {full_path}")
     return full_path
 
-@function_timer()
 def is_roof_slab_only(full_path):
     parts = full_path.split('/')
     last_part = parts[-1].lower()
@@ -666,8 +627,6 @@ def is_roof_slab_only(full_path):
     logger.debug(f"Checking roof slab for path: {full_path}, result: {is_slab}")
     return is_slab
 
-
-@function_timer()
 def process_data(df, activity_df, location_df, dataset_name, use_module_hierarchy_for_finishing=False):
     completed = df[df['statusName'] == 'Completed'].copy()
     
@@ -832,7 +791,6 @@ def process_data(df, activity_df, location_df, dataset_name, use_module_hierarch
 
 
 # Main analysis function for Wave City Club Structure
-@function_timer()
 def AnalyzeStatusManually(email=None, password=None):
     start_time = time.time()
 
@@ -948,9 +906,6 @@ def AnalyzeStatusManually(email=None, password=None):
     st.write(f"Total execution time: {end_time - start_time:.2f} seconds")
     logger.info(f"AnalyzeStatusManually completed in {end_time - start_time:.2f} seconds")
 
-
-
-@function_timer()
 def get_cos_files():
     try:
         # Initialize COS client
@@ -1069,7 +1024,6 @@ if 'ai_response' not in st.session_state:
     st.session_state.ai_response = {} 
 
 # Process Excel files for Wave City Club blocks with updated sheet names and expected_columns
-@function_timer()
 def process_file(file_stream, filename):
     try:
         workbook = openpyxl.load_workbook(file_stream)
@@ -1196,7 +1150,6 @@ def process_file(file_stream, filename):
         return [(None, None)]
 
 # Function to get access token for WatsonX API
-@function_timer()
 def get_access_token(api_key):
     try:
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -1215,15 +1168,16 @@ def get_access_token(api_key):
         return None
 
 #Slab code
-@function_timer()
 def GetSlabReport():
     st.write("EWS LIG Structure Work Tracker")
-    found_verdia = False
+    foundverdia = False
     today = datetime.today()
-    current_month_year = today.strftime("%m-%Y")  # Current month and year
     prev_month = today - relativedelta(months=1)
-    prev_month_year = prev_month.strftime("%m-%Y")  # Previous month and year
+    month_year = today.strftime("%m-%Y")
+    prev_month_year = prev_month.strftime("%m-%Y")
     
+    # cos_client = initialize_cos_client()
+     
     try:
         logger.info("Attempting to initialize COS client...")
         cos_client = ibm_boto3.client(
@@ -1238,59 +1192,51 @@ def GetSlabReport():
             ),
             endpoint_url=COS_ENDPOINT
         )
-        
-        # List objects in the S3 bucket
         response = cos_client.list_objects_v2(Bucket="projectreportnew")
         files = [obj['Key'] for obj in response.get('Contents', []) if obj['Key'].endswith('.xlsx')]
 
-        # Try to find the current month's file
         for file in files:
+            
             try:
-                if file.startswith("EWS LIG") and "Structure Work Tracker" in file and current_month_year in file:
-                    st.write(f"Found current month file: {file}")
+                if file.startswith("EWS LIG") and "Structure Work Tracker" in file:
                     response = cos_client.get_object(Bucket="projectreportnew", Key=file)
-                    st.write(f"Processing file: {file}")
                     
                     if st.session_state.ignore_month and st.session_state.ignore_year:
                         st.session_state.slabreport = ProcessEWS_LIG(io.BytesIO(response['Body'].read()), st.session_state.ignore_year, st.session_state.ignore_month)
                     else:
-                        st.session_state.slabreport = ProcessEWS_LIG(io.BytesIO(response['Body'].read()), st.session_state.ignore_year, st.session_state.ignore_month)               
-                    
-                    found_verdia = True
+                        st.session_state.slabreport = ProcessEWS_LIG(io.BytesIO(response['Body'].read()), st.session_state.ignore_year, st.session_state.ignore_month)              
+                    foundverdia = True
+                   
                     break
-
+                    
             except Exception as e:
-                st.error(f"Error processing file {file}: {e}")
+                st.info(e)
+                st.session_state.slabreport = "No Data Found"
 
-        if not found_verdia:
-            # Current month's file not found, display a message
-            st.warning(f"Current month file ({current_month_year}) not found.")
-            st.session_state.slabreport = "Current month file not found."
-
-            # Optionally, try to fetch the previous month's file if needed
+        if not foundverdia:
             for file in files:
                 try:
-                    if file.startswith("EWS LIG") and "Structure Work Tracker" in file and prev_month_year in file:
-                        st.write(f"Found previous month file: {file}")
+                    if file.startswith("EWS LIG") and "Structure Work Tracker" in file:
+                        # st.write("🕓 Previous month:", file)
                         response = cos_client.get_object(Bucket="projectreportnew", Key=file)
-                        st.write(f"Processing previous month file: {file}")
-
+                        # st.session_state.slabreport = ProcessVeridia(io.BytesIO(response['Body'].read()))
                         if st.session_state.ignore_month and st.session_state.ignore_year:
-                            st.session_state.slabreport = ProcessEWS_LIG(io.BytesIO(response['Body'].read()), st.session_state.ignore_year, st.session_state.ignore_month)  
+                            st.session_state.slabreport = ProcessEWS_LIG(io.BytesIO(response['Body'].read()), st.session_state.ignore_year, st.session_state.ignore_month)              # st.write(veridia)
                         else:
-                            st.session_state.slabreport = ProcessEWS_LIG(io.BytesIO(response['Body'].read()), st.session_state.ignore_year, st.session_state.ignore_month)
+                            st.session_state.slabreport  =  ProcessEWS_LIG(io.BytesIO(response['Body'].read()), st.session_state.ignore_year, st.session_state.ignore_month)
                         break
-
+                    # return veridia
                 except Exception as e:
-                    st.error(f"Error processing previous month file {file}: {e}")
-                    st.session_state.slabreport = "No Data Found"
-
+                    st.error(e)
+                    return "No Data Found"
+                   
     except Exception as e:
-        st.error(f"Error fetching COS files: {e}")
+        print(f"Error fetching COS files: {e}")
+        files = ["Error fetching COS files"]
         st.session_state.slabreport = "No Data Found"
 
+
 # WatsonX Prompt Generation
-@function_timer()
 def generatePrompt(json_datas, tower_name):
     try:
         GetSlabReport()
@@ -1442,7 +1388,6 @@ def generatePrompt(json_datas, tower_name):
         return generate_fallback_totals(json_datas)
 
 # Fallback Total Calculation
-@function_timer()
 def generate_fallback_totals(count_table):
     try:
         if not isinstance(count_table, pd.DataFrame):
@@ -1545,7 +1490,7 @@ def generate_fallback_totals(count_table):
                 {"Activity Name": "Kerb Stone", "Total": 0}
             ]}
         ], indent=2)
-@function_timer()
+
 def getTotal(ai_data):
     st.write(ai_data)
     try:
@@ -1575,7 +1520,6 @@ def getTotal(ai_data):
         return {}
 
 # Function to handle activity count display
-@function_timer()
 def display_activity_count():
     specific_activities = [
         "EL-First Fix", "Installation of doors", "Waterproofing Works",
@@ -1947,7 +1891,6 @@ def display_activity_count():
 
 
 # Combined function for Initialize and Fetch Data
-@function_timer()
 async def initialize_and_fetch_data(email, password):
     with st.spinner("Starting initialization and data fetching process..."):
         # Step 1: Login
@@ -2058,7 +2001,6 @@ async def initialize_and_fetch_data(email, password):
     return True
 
 
-@function_timer()
 def generate_consolidated_Checklist_excel(structure_analysis=None, activity_counts=None):
     try:
         # Add validation at the beginning
@@ -2371,12 +2313,10 @@ def generate_consolidated_Checklist_excel(structure_analysis=None, activity_coun
         return None
 
 # Combined function to handle analysis and display
-@function_timer(show_args=True)
 def run_analysis_and_display():
     try:
         # Step 1: Run status analysis
         st.write("Running status analysis...")
-      
         AnalyzeStatusManually()
         
         # Check if structure_analysis was populated
@@ -2435,7 +2375,7 @@ def run_analysis_and_display():
         # Step 7: Handle download
         if excel_file:
             timestamp = pd.Timestamp.now(tz='Asia/Kolkata').strftime('%Y%m%d_%H%M')
-            file_name = f"Consolidated_Checklist_EWS_LIG_{timestamp}.xlsx"
+            file_name = f"Consolidated_Checklist_EWSLIG_{timestamp}.xlsx"
             
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
