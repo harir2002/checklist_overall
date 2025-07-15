@@ -1,4 +1,15 @@
 
+
+
+
+
+
+
+
+
+
+
+
 import streamlit as st
 import requests
 import json
@@ -912,7 +923,7 @@ def generatePrompt(json_datas):
             {json_str}
 
             Categories and Activities:
-            - MEP: EL-First Fix, Min. count of UP-First Fix and CP-First Fix, C-Gypsum and POP Punning, EL-Second Fix, No. of Slab cast, Electrical
+            - MEP: EL-First Fix, Min. count of UP-First Fix and CP-First Fix, C-Gypsum and POP Punning, EL-Second Fix, No. of Slab cast, Electrical, Foundation Concrete
             - Interior Finishing: Installation of doors, Waterproofing Works, Wall Tiling, Floor Tiling
             - ED Civil: Sewer Line, Storm Line, GSB, WMM, Stamp Concrete, Saucer drain, Kerb Stone
             - Structure Work: (no activities specified)
@@ -927,7 +938,8 @@ def generatePrompt(json_datas):
                   {{"Activity Name": "C-Gypsum and POP Punning", "Total": 0}},
                   {{"Activity Name": "EL-Second Fix", "Total": 0}},
                   {{"Activity Name": "No. of Slab cast", "Total": 0}},
-                  {{"Activity Name": "Electrical", "Total": 0}}
+                  {{"Activity Name": "Electrical", "Total": 0}},
+                  {{"Activity Name": "Foundation Concrete", "Total": 0}}
                 ]
               }},
               {{
@@ -1052,7 +1064,8 @@ def generate_fallback_totals(count_table):
                     {"Activity Name": "C-Gypsum and POP Punning", "Total": 0},
                     {"Activity Name": "EL-Second Fix", "Total": 0},
                     {"Activity Name": "No. of Slab cast", "Total": 0},
-                    {"Activity Name": "Electrical", "Total": 0}
+                    {"Activity Name": "Electrical", "Total": 0},
+                    {"Activity Name": "Foundation Concrete", "Total": 0}
                 ]},
                 {"Category": "Interior Finishing", "Activities": [
                     {"Activity Name": "Installation of doors", "Total": 0},
@@ -1124,7 +1137,8 @@ def generate_fallback_totals(count_table):
                 {"Activity Name": "C-Gypsum and POP Punning", "Total": 0},
                 {"Activity Name": "EL-Second Fix", "Total": 0},
                 {"Activity Name": "No. of Slab cast", "Total": 0},
-                {"Activity Name": "Electrical", "Total": 0}
+                {"Activity Name": "Electrical", "Total": 0},
+                {"Activity Name": "Foundation Concrete", "Total": 0}
             ]},
             {"Category": "Interior Finishing", "Activities": [
                 {"Activity Name": "Installation of doors", "Total": 0},
@@ -1177,7 +1191,8 @@ def display_activity_count():
         "EL-First Fix", "Installation of doors", "Waterproofing Works",
         "C-Gypsum and POP Punning", "Wall Tiling", "Floor Tiling",
         "EL-Second Fix", "No. of Slab cast", "Sewer Line", "Storm Line",
-        "GSB", "WMM", "Stamp Concrete", "Saucer drain", "Kerb Stone", "Electrical"
+        "GSB", "WMM", "Stamp Concrete", "Saucer drain", "Kerb Stone", "Electrical",
+        "Foundation Concrete"
     ]
     all_activities = specific_activities + ["UP-First Fix and CP-First Fix"]
 
@@ -1198,7 +1213,8 @@ def display_activity_count():
         "WMM": "ED Civil",
         "Stamp Concrete": "ED Civil",
         "Saucer drain": "ED Civil",
-        "Kerb Stone": "ED Civil"
+        "Kerb Stone": "ED Civil",
+        "Foundation Concrete": "Concrete"
     }
 
     count_tables = {}
@@ -1743,6 +1759,93 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
         for col in range(12):  # Adjust for 2 tables side by side
             worksheet.set_column(col, col, 18)
 
+        # Create Sheet 2: Checklist June
+        worksheet2 = workbook.add_worksheet("Checklist June")
+        current_row = 0
+
+        # Write title
+        worksheet2.write(current_row, 0, "Checklist: June", header_format)
+        current_row += 1
+
+        # Write headers
+        headers = [
+            "Site",
+            "Total of Missing & Open Checklist-Civil",
+            "Total of Missing & Open Checklist-MEP",
+            "TOTAL"
+        ]
+        for col, header in enumerate(headers, start=0):
+            worksheet2.write(current_row, col, header, header_format)
+        current_row += 1
+
+        # Categorize blocks into Civil and MEP
+        def map_category_to_type(category):
+            if category in ["Interior Finishing (Civil)", "Structure", "External Development (Civil)"]:
+                return "Civil"
+            elif category in ["MEP", "External Development (MEP)"]:
+                return "MEP"
+            else:
+                return "Civil"  # Default to Civil if unknown
+
+        # Aggregate open/missing counts by block and type (Civil/MEP)
+        summary_data = {}
+        for _, row in df.iterrows():
+            block = row["Block"]
+            category = row["Category"]
+            open_missing = row["Open/Missing check list"]
+            
+            # Convert block name to display format (e.g., "B5" -> "ELigo-Block 05")
+            if "External Development" in category:
+                site_name = f"External Development-{block}"
+            else:
+                if block.startswith("B") and block[1:].isdigit():
+                    block_num = block[1:]
+                    if len(block_num) == 1:
+                        block_num = f"0{block_num}"  # Pad single digits
+                    site_name = f"ELigo-Block {block_num}"
+                else:
+                    site_name = f"ELigo-{block}"  # Handle non-numeric blocks like "B1 Banket Hall & Finedine"
+
+            type_ = map_category_to_type(category)
+            
+            if site_name not in summary_data:
+                summary_data[site_name] = {"Civil": 0, "MEP": 0}
+            
+            summary_data[site_name][type_] += open_missing
+
+        logger.info(f"Summary data for Sheet 2: {summary_data}")
+
+        # Write summary data to Sheet 2
+        for site_name, counts in sorted(summary_data.items()):
+            civil_count = counts["Civil"]
+            mep_count = counts["MEP"]
+            total_count = civil_count + mep_count
+            
+            worksheet2.write(current_row, 0, site_name, cell_format)
+            worksheet2.write(current_row, 1, civil_count, cell_format)
+            worksheet2.write(current_row, 2, mep_count, cell_format)
+            worksheet2.write(current_row, 3, total_count, cell_format)
+            
+            current_row += 1
+
+        # Auto-adjust column widths for Sheet 2
+        for col in range(4):
+            max_length = 0
+            for row in range(current_row):
+                try:
+                    # Approximate cell value retrieval for xlsxwriter
+                    if col == 0:
+                        cell_value = sorted(summary_data.keys())[row-2] if row >= 2 else headers[col]
+                    else:
+                        cell_value = str(list(summary_data.values())[row-2].get("Civil" if col == 1 else "MEP" if col == 2 else "total", 0)) if row >= 2 else headers[col]
+                    if len(cell_value) > max_length:
+                        max_length = len(cell_value)
+                except:
+                    pass
+            adjusted_width = max_length + 2
+            worksheet2.set_column(col, col, adjusted_width)
+
+        # Close the workbook
         workbook.close()
         output.seek(0)
         return output
