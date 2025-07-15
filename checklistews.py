@@ -1,5 +1,7 @@
 
 
+
+
 import streamlit as st
 import requests
 import json
@@ -2303,6 +2305,90 @@ def generate_consolidated_Checklist_excel(structure_analysis=None, activity_coun
         for col in range(12):
             worksheet.set_column(col, col, 18)
 
+        # Create Sheet 2: Checklist June
+        worksheet2 = workbook.add_worksheet("Checklist June")
+        current_row = 0
+
+        # Write title
+        worksheet2.write(current_row, 0, "Checklist: June", header_format)
+        current_row += 1
+
+        # Write headers
+        headers = [
+            "Site",
+            "Total of Missing & Open Checklist-Civil",
+            "Total of Missing & Open Checklist-MEP",
+            "TOTAL"
+        ]
+        for col, header in enumerate(headers, start=0):
+            worksheet2.write(current_row, col, header, header_format)
+        current_row += 1
+
+        # Categorize towers into Civil and MEP
+        def map_category_to_type(category):
+            if category in ["Interior Finishing (Civil)", "External Development (Civil)"]:
+                return "Civil"
+            elif category in ["MEP"]:
+                return "MEP"
+            else:
+                return "Civil"  # Default to Civil if unknown
+
+        # Aggregate open/missing counts by tower and type (Civil/MEP)
+        summary_data = {}
+        for _, row in df.iterrows():
+            tower = row["Tower"]
+            category = row["Category"]
+            open_missing = row["Open/Missing check list"]
+            
+            # Convert tower name to display format (e.g., "EWS Tower 1" -> "ELigo-EWS Tower 01")
+            if "External Development" in category:
+                site_name = f"External Development-{tower}"
+            else:
+                tower_type, tower_num = tower.split(" Tower ")
+                if len(tower_num) == 1:
+                    tower_num = f"0{tower_num}"  # Pad single digits
+                site_name = f"ELigo-{tower_type} Tower {tower_num}"
+
+            type_ = map_category_to_type(category)
+            
+            if site_name not in summary_data:
+                summary_data[site_name] = {"Civil": 0, "MEP": 0}
+            
+            summary_data[site_name][type_] += open_missing
+
+        logger.info(f"Summary data for Sheet 2: {summary_data}")
+
+        # Write summary data to Sheet 2
+        for site_name, counts in sorted(summary_data.items()):
+            civil_count = counts["Civil"]
+            mep_count = counts["MEP"]
+            total_count = civil_count + mep_count
+            
+            worksheet2.write(current_row, 0, site_name, cell_format)
+            worksheet2.write(current_row, 1, civil_count, cell_format)
+            worksheet2.write(current_row, 2, mep_count, cell_format)
+            worksheet2.write(current_row, 3, total_count, cell_format)
+            
+            current_row += 1
+
+        # Auto-adjust column widths for Sheet 2
+        for col in range(4):
+            max_length = 0
+            for row in range(current_row):
+                try:
+                    # Approximate cell value retrieval for xlsxwriter
+                    if col == 0:
+                        cell_value = sorted(summary_data.keys())[row-2] if row >= 2 else headers[col]
+                    else:
+                        cell_value = str(list(summary_data.values())[row-2].get("Civil" if col == 1 else "MEP" if col == 2 else "total", 0)) if row >= 2 else headers[col]
+                    if len(cell_value) > max_length:
+                        max_length = len(cell_value)
+                except:
+                    pass
+            adjusted_width = max_length + 2
+            worksheet2.set_column(col, col, adjusted_width)
+
+        # Close the workbook
         workbook.close()
         output.seek(0)
         return output
