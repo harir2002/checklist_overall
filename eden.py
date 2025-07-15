@@ -3493,7 +3493,7 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
             worksheet2.write(current_row, 0, site_name, cell_format)
             worksheet2.write(current_row, 1, civil_count, cell_format)
             worksheet2.write(current_row, 2, mep_count, cell_format)
-            worksheet2.write(current_row, 3 حقیقی, total_count, cell_format)
+            worksheet2.write(current_row, 3, total_count, cell_format)
             
             current_row += 1
 
