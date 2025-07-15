@@ -201,9 +201,13 @@ async def GetProjectId():
         st.session_state.ELIGO_Structure = data['data'][0]['planId']
         st.session_state.Eligo_Tower_F_Finishing = data['data'][1]['planId']
         st.session_state.Eligo_Tower_G_Finishing = data['data'][2]['planId']    
+        st.session_state.Eligo_Tower_H_Finishing = data['data'][4]['planId']
+        st.session_state.Eligo_Non_Tower_Area_Finishing = data['data'][3]['planId']
         st.write(f"ELIGO - Structure Project ID: {st.session_state.ELIGO_Structure}")
         st.write(f"ELIGO - Tower F Finishing Project ID: {st.session_state.Eligo_Tower_F_Finishing}")
         st.write(f"ELIGO - Tower G Finishing Project ID: {st.session_state.Eligo_Tower_G_Finishing}")
+        st.write(f"ELIGO - Tower H Finishing Project ID: {st.session_state.Eligo_Tower_H_Finishing}")
+        st.write(f"ELIGO - Non Tower Area Finishing Project ID: {st.session_state.Eligo_Non_Tower_Area_Finishing}")
     except Exception as e:
         st.error(f"❌ Error fetching Project IDs: {str(e)}")
         logger.error(f"Error fetching Project IDs: {str(e)}")   
@@ -2995,14 +2999,105 @@ def generate_consolidated_Checklist_excel(ai_data):
             adjusted_width = (max_length + 2)
             worksheet.column_dimensions[column].width = adjusted_width
 
+        # Create Sheet 2: Checklist June
+        worksheet2 = workbook.create_sheet(title="Checklist June")
+        current_row = 1
+
+        # Write title
+        worksheet2.cell(row=current_row, column=1).value = "Checklist"
+        worksheet2.cell(row=current_row, column=1).font = header_font
+        current_row += 1
+
+        # Write headers
+        headers = [
+            "Site",
+            "Total of Missing & Open Checklist-Civil",
+            "Total of Missing & Open Checklist-MEP",
+            "TOTAL"
+        ]
+        for col, header in enumerate(headers, start=1):
+            cell = worksheet2.cell(row=current_row, column=col)
+            cell.value = header
+            cell.font = header_font
+            cell.border = border
+            cell.alignment = center_alignment
+        current_row += 1
+
+        # Categorize towers into Civil and MEP
+        def map_category_to_type(category):
+            if category in ["Civil Works", "Structure Works"]:
+                return "Civil"
+            elif category in ["MEP Works", "Interior Finishing Works"]:
+                return "MEP"
+            elif category == "External Development":
+                return "Civil"
+            else:
+                return "Civil"  # Default to Civil if unknown
+
+        # Aggregate open/missing counts by tower and type (Civil/MEP)
+        summary_data = {}
+        for _, row in df.iterrows():
+            tower = row["Tower"]
+            category = row["Category"]
+            open_missing = row["Open/Missing check list"]
+            
+            # Convert tower name to display format (e.g., "T4A" -> "ELigo-Tower 04 A")
+            if "External Development" in category:
+                site_name = f"External Development-{tower}"
+            else:
+                tower_num = tower[1:]  # Remove 'T' prefix
+                if len(tower_num) == 1:
+                    tower_num = f"0{tower_num}"  # Pad single digits (e.g., "T2" -> "02")
+                site_name = f"ELigo-Tower {tower_num}"
+
+            type_ = map_category_to_type(category)
+            
+            if site_name not in summary_data:
+                summary_data[site_name] = {"Civil": 0, "MEP": 0}
+            
+            summary_data[site_name][type_] += open_missing
+
+        logger.info(f"Summary data for Sheet 2: {summary_data}")
+
+        # Write summary data to Sheet 2
+        for site_name, counts in sorted(summary_data.items()):
+            civil_count = counts["Civil"]
+            mep_count = counts["MEP"]
+            total_count = civil_count + mep_count
+            
+            worksheet2.cell(row=current_row, column=1).value = site_name
+            worksheet2.cell(row=current_row, column=2).value = civil_count
+            worksheet2.cell(row=current_row, column=3).value = mep_count
+            worksheet2.cell(row=current_row, column=4).value = total_count
+            
+            for col in range(1, 5):
+                cell = worksheet2.cell(row=current_row, column=col)
+                cell.border = border
+                cell.alignment = center_alignment
+            current_row += 1
+
+        # Adjust column widths for Sheet 2
+        for col in worksheet2.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            worksheet2.column_dimensions[column].width = adjusted_width
+
         # Save the workbook to the BytesIO buffer
         workbook.save(output)
         output.seek(0)
 
+        logger.info("Excel file generated successfully")
         return output
 
     except Exception as e:
-        logger.error(f"Error generating consolidated Excel: {str(e)}")
+        logger.error(f"Error generating consolidated Excel: {str(e)}", exc_info=True)
         st.error(f"❌ Error generating Excel file: {str(e)}")
         return None
 
