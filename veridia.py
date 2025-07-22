@@ -32,7 +32,6 @@ from datetime import date
 import concurrent.futures
 from dateutil.relativedelta import relativedelta
 from veridia1 import ProcessVeridia
-import demjson3  # type: ignore
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -3534,9 +3533,8 @@ st.sidebar.title("📊 Status Analysis")
 if st.sidebar.button("Analyze and Display Activity Counts"):
     run_analysis_and_display()
 
-st.sidebar.title("📊 Slab Cycle")
-st.session_state.ignore_year = st.sidebar.number_input("Ignore Year", min_value=1900, max_value=2100, value=2023, step=1, key="ignore_year1")
-st.session_state.ignore_month = st.sidebar.number_input("Ignore Month", min_value=1, max_value=12, value=3, step=1, key="ignore_month1")
+st.session_state.ignore_year = datetime.now().year
+st.session_state.ignore_month = datetime.now().month
 
 # Combined function for Initialize All Data and Fetch COS
 async def initialize_and_fetch_data(email, password):
