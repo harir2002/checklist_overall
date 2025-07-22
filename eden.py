@@ -2439,7 +2439,8 @@ def AnalyzeStatusManually(email=None, password=None):
             return
 
     structure_analysis, structure_total = process_data(structure_data, structure_activity, structure_locations, "Structure")
-
+    st.session_state.structure_analysis = structure_analysis
+    st.session_state.structure_total = structure_total
     st.write("### Eden Structure Quality Analysis (Completed Activities):")
     st.write("**Full Output (Structure):**")
     structure_output = process_manually(structure_analysis, structure_total, "Structure")
