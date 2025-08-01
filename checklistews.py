@@ -1,5 +1,7 @@
 
 
+
+
 import streamlit as st
 import requests
 import json
@@ -2073,7 +2075,7 @@ def generate_consolidated_Checklist_excel(structure_analysis=None, activity_coun
             "GSB": "Granular Sub-base",
             "WMM": "WMM",
             "Saucer drain": "Saucer drain/Paver block",
-            "Kerb Stone": "Kerb Stone",  # Ensured mapping is consistent
+            "Kerb Stone": "Kerb Stone",
             "Electrical": "Electrical Cable"
         }
 
@@ -2107,15 +2109,12 @@ def generate_consolidated_Checklist_excel(structure_analysis=None, activity_coun
             return None
 
         # Map slab report data to tracker_counts format
-        # Assuming slab_data is in the format [{"Tower": "EWST1", "Slab Count": 51}, ...]
         tracker_counts = []
         expected_towers = ["EWST1", "EWST2", "EWST3", "LIGT1", "LIGT2", "LIGT3"]
         tower_counts = {tower: 0 for tower in expected_towers}  # Default to 0 for all towers
 
         for entry in slab_data:
             tower = entry.get("Tower")
-            # The key for the count might be "Slab Count", "Green (1)", or something else depending on ProcessEWS_LIG
-            # We'll check common possibilities
             count = entry.get("Slab Count") or entry.get("Green (1)") or entry.get("Count") or 0
             if tower in expected_towers:
                 tower_counts[tower] = int(count) if isinstance(count, (int, float)) and not pd.isna(count) else 0
@@ -2184,8 +2183,11 @@ def generate_consolidated_Checklist_excel(structure_analysis=None, activity_coun
                                         break
 
                         in_progress = 0
-                        # Calculate Open/Missing check list, ensuring positive value
-                        open_missing = abs(completed_flats - closed_checklist)
+                        # Calculate Open/Missing check list with new logic
+                        if completed_flats == 0 or closed_checklist > completed_flats:
+                            open_missing = 0
+                        else:
+                            open_missing = abs(completed_flats - closed_checklist)
 
                         display_activity = asite_activities[0] if isinstance(asite_activity, list) else asite_activity
 
@@ -2303,6 +2305,89 @@ def generate_consolidated_Checklist_excel(structure_analysis=None, activity_coun
         for col in range(12):
             worksheet.set_column(col, col, 18)
 
+        # Create Sheet 2: Checklist June
+        worksheet2 = workbook.add_worksheet("Checklist June")
+        current_row = 0
+
+        # Write title
+        worksheet2.write(current_row, 0, "Checklist: June", header_format)
+        current_row += 1
+
+        # Write headers
+        headers = [
+            "Site",
+            "Total of Missing & Open Checklist-Civil",
+            "Total of Missing & Open Checklist-MEP",
+            "TOTAL"
+        ]
+        for col, header in enumerate(headers, start=0):
+            worksheet2.write(current_row, col, header, header_format)
+        current_row += 1
+
+        # Categorize towers into Civil and MEP
+        def map_category_to_type(category):
+            if category in ["Interior Finishing (Civil)", "External Development (Civil)"]:
+                return "Civil"
+            elif category in ["MEP"]:
+                return "MEP"
+            else:
+                return "Civil"  # Default to Civil if unknown
+
+        # Aggregate open/missing counts by tower and type (Civil/MEP)
+        summary_data = {}
+        for _, row in df.iterrows():
+            tower = row["Tower"]
+            category = row["Category"]
+            open_missing = row["Open/Missing check list"]
+            
+            # Convert tower name to display format (e.g., "EWS Tower 1" -> "ELigo-EWS Tower 01")
+            if "External Development" in category:
+                site_name = f"External Development-{tower}"
+            else:
+                tower_type, tower_num = tower.split(" Tower ")
+                if len(tower_num) == 1:
+                    tower_num = f"0{tower_num}"  # Pad single digits
+                site_name = f"ELigo-{tower_type} Tower {tower_num}"
+
+            type_ = map_category_to_type(category)
+            
+            if site_name not in summary_data:
+                summary_data[site_name] = {"Civil": 0, "MEP": 0}
+            
+            summary_data[site_name][type_] += open_missing
+
+        logger.info(f"Summary data for Sheet 2: {summary_data}")
+
+        # Write summary data to Sheet 2
+        for site_name, counts in sorted(summary_data.items()):
+            civil_count = counts["Civil"]
+            mep_count = counts["MEP"]
+            total_count = civil_count + mep_count
+            
+            worksheet2.write(current_row, 0, site_name, cell_format)
+            worksheet2.write(current_row, 1, civil_count, cell_format)
+            worksheet2.write(current_row, 2, mep_count, cell_format)
+            worksheet2.write(current_row, 3, total_count, cell_format)
+            
+            current_row += 1
+
+        # Auto-adjust column widths for Sheet 2
+        for col in range(4):
+            max_length = 0
+            for row in range(current_row):
+                try:
+                    if col == 0:
+                        cell_value = sorted(summary_data.keys())[row-2] if row >= 2 else headers[col]
+                    else:
+                        cell_value = str(list(summary_data.values())[row-2].get("Civil" if col == 1 else "MEP" if col == 2 else "total", 0)) if row >= 2 else headers[col]
+                    if len(cell_value) > max_length:
+                        max_length = len(cell_value)
+                except:
+                    pass
+            adjusted_width = max_length + 2
+            worksheet2.set_column(col, col, adjusted_width)
+
+        # Close the workbook
         workbook.close()
         output.seek(0)
         return output
@@ -2440,14 +2525,9 @@ if st.sidebar.button("Analyze and Display Activity Counts"):
         logging.error(f"Stack trace:\n{traceback.format_exc()}")
         st.error(f"Error occurred: {str(e)}\nCheck logs for details.")
 
+st.sidebar.title("📊 Slab Cycle")
 st.session_state.ignore_year = datetime.now().year
 st.session_state.ignore_month = datetime.now().month
-
-
-
-
-
-
 
 
 
