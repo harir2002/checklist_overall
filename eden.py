@@ -2439,8 +2439,7 @@ def AnalyzeStatusManually(email=None, password=None):
             return
 
     structure_analysis, structure_total = process_data(structure_data, structure_activity, structure_locations, "Structure")
-    st.session_state.structure_analysis = structure_analysis
-    st.session_state.structure_total = structure_total
+
     st.write("### Eden Structure Quality Analysis (Completed Activities):")
     st.write("**Full Output (Structure):**")
     structure_output = process_manually(structure_analysis, structure_total, "Structure")
@@ -3245,15 +3244,23 @@ async def initialize_and_fetch_data(email, password):
     return True
 
 
+import pandas as pd
+import xlsxwriter
+import io
+import streamlit as st
+import logging
+
+# Configure logging (if not already configured elsewhere)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
     try:
-        # Define categories and activities (based on the image and existing code)
+        # Define categories and activities
         categories = {
             "Interior Finishing (Civil)": ["Installation of doors", "Waterproofing Works", "Wall Tiling", "Floor Tiling"],
-            "MEP": ["EL-First Fix", "Plumbing Works", "C-Gypsum and POP Punning", "EL-Second Fix", "No. of Slab cast", "Electrical"],
-            "Structure": [],  # Structure Work has no activities specified in the prompt
-            "External Development (Civil)": ["Sewer Line", "Storm Line", "GSB", "WMM", "Stamp Concrete", "Saucer drain", "Kerb Stone"],
-            "External Development (MEP)": []  # Add MEP activities for External Development if needed
+            "MEP": ["EL-First Fix", "Plumbing Works", "C-Gypsum and POP Punning", "EL-Second Fix", "No. of Slab cast"],
+            "External Development (Civil)": ["Sewer Line", "Storm Line", "GSB", "WMM", "Stamp Concrete", "Saucer drain", "Kerb Stone"]
         }
 
         # Define the COS to Asite activity name mapping
@@ -3277,7 +3284,7 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
             "Stamp Concrete": "Concreting"
         }
 
-        # Towers to include (based on the image, updated to use Tower 4 instead of 4A/4B)
+        # Towers to include
         towers = ["Tower 4", "Tower 7"]
 
         # Initialize list to store consolidated data
@@ -3285,7 +3292,6 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
 
         # Process data for each tower and category
         for tower in towers:
-            # Map the tower name to the format used in activity_counts and structure_analysis
             tower_key = tower.replace("Tower ", "T")  # e.g., "Tower 4" -> "T4"
             for category, activities in categories.items():
                 # Skip empty categories for now (like Structure and External Development MEP)
@@ -3316,16 +3322,19 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
                         completed_flats = 0
                         if tower_key in activity_counts:
                             count_table = activity_counts[tower_key]
-                            # Special handling for Plumbing Works (sum of UP-First Fix and CP-First Fix)
+                            # Special handling for Plumbing Works
                             if activity == "Plumbing Works":
                                 up_count = count_table.loc["UP-First Fix and CP-First Fix", "Count_Filtered"] if "UP-First Fix and CP-First Fix" in count_table.index else 0
                                 completed_flats = up_count
                             else:
                                 completed_flats = count_table.loc[activity, "Count_Filtered"] if activity in count_table.index else 0
 
-                        # Placeholder values for "In progress" and "Open/Missing check list"
+                        # Calculate Open/Missing check list per clarified requirements
                         in_progress = 0  # Not calculated in the current code
-                        open_missing = abs(completed_flats - closed_checklist)  # Calculate as absolute difference
+                        if completed_flats == 0 or closed_checklist > completed_flats:
+                            open_missing = 0
+                        else:
+                            open_missing = abs(completed_flats - closed_checklist)
 
                         # Use the first Asite activity name for display
                         display_activity = asite_activities[0] if isinstance(asite_activity, list) else asite_activity
@@ -3373,7 +3382,7 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
         headers = ["Activity Name", "Completed", "In progress", "Closed checklist", "Open/Missing check list"]
 
         # Starting positions for each section
-        col_start = 1  # Start from column B (1 in xlsxwriter)
+        col_start = 1  # Start from column B
         row_start = 0
 
         # Group by Tower
@@ -3426,15 +3435,13 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
             # Move to the next tower (below the current sections)
             row_start = row_pos
 
-        
-
         # Auto-adjust column widths for Sheet 1
         for col in range(col_start, col_pos):
             worksheet.set_column(col, col, 20)
 
         # Create Sheet 2: Checklist June
         worksheet2 = workbook.add_worksheet("Checklist June")
-        current_row = 0  # xlsxwriter uses 0-based indexing
+        current_row = 0
 
         # Write title
         worksheet2.write(current_row, 0, "Checklist: June", header_format)
@@ -3453,12 +3460,12 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
 
         # Categorize towers into Civil and MEP
         def map_category_to_type(category):
-            if category in ["Interior Finishing (Civil)", "Structure", "External Development (Civil)"]:
+            if category in ["Interior Finishing (Civil)"]:
                 return "Civil"
-            elif category in ["MEP", "External Development (MEP)"]:
+            elif category in ["MEP"]:
                 return "MEP"
             else:
-                return "Civil"  # Default to Civil if unknown
+                return "Civil"  # Default to Civil
 
         # Aggregate open/missing counts by tower and type (Civil/MEP)
         summary_data = {}
@@ -3467,14 +3474,11 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
             category = row["Category"]
             open_missing = row["Open/Missing check list"]
             
-            # Convert tower name to display format (e.g., "T4" -> "Eden-Tower 04")
-            if "External Development" in category:
-                site_name = f"External Development-{tower}"
-            else:
-                tower_num = tower.replace("Tower ", "")  # Remove 'Tower ' prefix
-                if len(tower_num) == 1:
-                    tower_num = f"0{tower_num}"  # Pad single digits (e.g., "T2" -> "02")
-                site_name = f"Eden-Tower {tower_num}"
+            # Convert tower name to display format
+            tower_num = tower.replace("Tower ", "")
+            if len(tower_num) == 1:
+                tower_num = f"0{tower_num}"
+            site_name = f"Eden-Tower {tower_num}"
 
             type_ = map_category_to_type(category)
             
@@ -3503,8 +3507,11 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
             max_length = 0
             for row in range(current_row):
                 try:
-                    # xlsxwriter doesn't have direct cell access; approximate length calculation
-                    cell_value = str(df.iloc[row][headers[col].lower().replace(" ", "_")] if col == 0 else summary_data.get(list(sorted(summary_data.keys()))[row-2], {}).get("Civil" if col == 1 else "MEP" if col == 2 else "total", 0))
+                    # Approximate length calculation
+                    if col == 0:
+                        cell_value = str(list(sorted(summary_data.keys()))[row-2] if row >= 2 else headers[col])
+                    else:
+                        cell_value = str(summary_data.get(list(sorted(summary_data.keys()))[row-2], {}).get("Civil" if col == 1 else "MEP" if col == 2 else "total", 0))
                     if len(cell_value) > max_length:
                         max_length = len(cell_value)
                 except:
@@ -3521,7 +3528,6 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
         logger.error(f"Error generating consolidated Excel: {str(e)}")
         st.error(f"❌ Error generating Excel file: {str(e)}")
         return None
-
 
 # Combined function to handle analysis and display
 def run_analysis_and_display():
