@@ -1,15 +1,4 @@
 
-
-
-
-
-
-
-
-
-
-
-
 import streamlit as st
 import requests
 import json
@@ -1547,8 +1536,57 @@ async def initialize_and_fetch_data(email, password):
     return True
 
 
-def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
+def generate_consolidated_Checklist_excel(structure_analysis=None, activity_counts=None):
     try:
+        # Add validation at the beginning
+        if structure_analysis is None:
+            structure_analysis = st.session_state.get('structure_analysis', None)
+            if structure_analysis is None:
+                st.error("❌ No structure analysis data available.")
+                logger.error("structure_analysis is None in generate_consolidated_Checklist_excel")
+                return None
+        
+        if activity_counts is None:
+            activity_counts = st.session_state.get('ai_response', {})
+            if not activity_counts:
+                st.error("❌ No activity counts data available.")
+                logger.error("activity_counts is empty in generate_consolidated_Checklist_excel")
+                return None
+
+        # Validate structure_analysis columns
+        if not isinstance(structure_analysis, pd.DataFrame):
+            st.error("❌ structure_analysis is not a DataFrame.")
+            logger.error("structure_analysis is not a DataFrame")
+            return None
+
+        expected_columns = ['tower_name', 'activityName', 'CompletedCount']
+        missing_columns = [col for col in expected_columns if col not in structure_analysis.columns]
+        if missing_columns:
+            st.error(f"❌ Missing columns in structure_analysis: {missing_columns}")
+            logger.error(f"Missing columns in structure_analysis: {missing_columns}")
+            return None
+
+        # Transform activity_counts if it's a dictionary
+        transformed_activity_counts = []
+        if isinstance(activity_counts, dict):
+            for block, categories_data in activity_counts.items():
+                for category_data in categories_data:
+                    for activity_data in category_data.get("Activities", []):
+                        transformed_activity_counts.append({
+                            "tower": block,
+                            "activity": activity_data.get("Activity Name"),
+                            "completed_count": activity_data.get("Total", 0)
+                        })
+        else:
+            transformed_activity_counts = activity_counts
+
+        # Validate transformed_activity_counts
+        if not isinstance(transformed_activity_counts, list):
+            st.error("❌ Transformed activity_counts is not a list.")
+            logger.error("Transformed activity_counts is not a list")
+            return None
+
+        # Define categories and mappings
         categories = {
             "Interior Finishing (Civil)": ["Installation of doors", "Waterproofing Works", "Wall Tiling", "Floor Tiling"],
             "MEP": ["EL-First Fix", "Plumbing Works", "C-Gypsum and POP Punning", "EL-Second Fix", "No. of Slab cast", "Electrical"],
@@ -1577,6 +1615,7 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
             "Stamp Concrete": "Concreting"
         }
 
+        # Define blocks
         blocks = [
             "B1 Banket Hall & Finedine", "B5", "B6", "B7", "B9", "B8",
             "B2 & B3", "B4", "B11", "B10"
@@ -1587,7 +1626,7 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
         for block in blocks:
             block_key = block
             for category, activities in categories.items():
-                if not activities and "Structure" not in category:
+                if not activities and "Structure" not in category and "External Development (MEP)" not in category:
                     continue
 
                 if activities:
@@ -1608,24 +1647,26 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
                                 closed_checklist += matching_rows['CompletedCount'].sum() if not matching_rows.empty else 0
 
                         completed_flats = 0
-                        if block_key in activity_counts:
-                            ai_data = activity_counts[block_key]  # ai_data is a list of category dictionaries
-                            # Special handling for Plumbing Works
+                        # Use transformed_activity_counts for completed flats
+                        block_data = [item for item in transformed_activity_counts if item.get("tower") == block]
+                        if block_data:
                             if activity == "Plumbing Works":
-                                for cat_data in ai_data:
-                                    for act in cat_data['Activities']:
-                                        if act['Activity Name'] == "UP-First Fix and CP-First Fix":
-                                            completed_flats = act['Total']
-                                            break
+                                for item in block_data:
+                                    if item.get("activity") == "UP-First Fix and CP-First Fix":
+                                        completed_flats = item.get("completed_count", 0)
+                                        break
                             else:
-                                for cat_data in ai_data:
-                                    for act in cat_data['Activities']:
-                                        if act['Activity Name'] == activity:
-                                            completed_flats = act['Total']
-                                            break
+                                for item in block_data:
+                                    if item.get("activity") == activity:
+                                        completed_flats = item.get("completed_count", 0)
+                                        break
 
                         in_progress = 0
-                        open_missing = abs(completed_flats - closed_checklist)
+                        # Calculate Open/Missing check list with new logic
+                        if completed_flats == 0 or closed_checklist > completed_flats:
+                            open_missing = 0
+                        else:
+                            open_missing = abs(completed_flats - closed_checklist)
 
                         display_activity = asite_activities[0] if isinstance(asite_activity, list) else asite_activity
 
@@ -1780,7 +1821,7 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
 
         # Categorize blocks into Civil and MEP
         def map_category_to_type(category):
-            if category in ["Interior Finishing (Civil)", "Structure", "External Development (Civil)"]:
+            if category in ["Interior Finishing (Civil)", "External Development (Civil)", "Structure"]:
                 return "Civil"
             elif category in ["MEP", "External Development (MEP)"]:
                 return "MEP"
@@ -1795,16 +1836,16 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
             open_missing = row["Open/Missing check list"]
             
             # Convert block name to display format (e.g., "B5" -> "ELigo-Block 05")
-            if "External Development" in category:
-                site_name = f"External Development-{block}"
+            if block == "B1 Banket Hall & Finedine":
+                site_name = "ELigo-Block 01 Banket Hall & Finedine"
+            elif "&" in block:
+                block_num = block.replace(" & ", "&")
+                site_name = f"ELigo-Block {block_num}"
             else:
-                if block.startswith("B") and block[1:].isdigit():
-                    block_num = block[1:]
-                    if len(block_num) == 1:
-                        block_num = f"0{block_num}"  # Pad single digits
-                    site_name = f"ELigo-Block {block_num}"
-                else:
-                    site_name = f"ELigo-{block}"  # Handle non-numeric blocks like "B1 Banket Hall & Finedine"
+                block_num = block[1:]
+                if len(block_num) == 1:
+                    block_num = f"0{block_num}"  # Pad single digits
+                site_name = f"ELigo-Block {block_num}"
 
             type_ = map_category_to_type(category)
             
@@ -1833,7 +1874,6 @@ def generate_consolidated_Checklist_excel(structure_analysis, activity_counts):
             max_length = 0
             for row in range(current_row):
                 try:
-                    # Approximate cell value retrieval for xlsxwriter
                     if col == 0:
                         cell_value = sorted(summary_data.keys())[row-2] if row >= 2 else headers[col]
                     else:
