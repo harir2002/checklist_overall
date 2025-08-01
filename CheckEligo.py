@@ -59,38 +59,7 @@ API_KEY = os.getenv("API_KEY_1")
 LOGIN_URL = "https://dms.asite.com/apilogin/"
 IAM_TOKEN_URL = "https://iam.cloud.ibm.com/identity/token"
 
-import time
-from functools import wraps
-import streamlit as st
-
-def function_timer(show_args=False):
-    """Decorator to measure and display function execution time"""
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            # Start timer
-            start_time = time.time()
-            
-            # Call the original function
-            result = func(*args, **kwargs)
-            
-            # Calculate duration
-            duration = time.time() - start_time
-            
-            # Display timing info
-            func_name = func.__name__.replace('_', ' ').title()
-            arg_info = ""
-            if show_args and args:
-                arg_info = f" with args: {args[1:]}"  # Skip self if present
-            
-            st.info(f"⏱️ {func_name}{arg_info} executed in {duration:.2f} seconds")
-            
-            return result
-        return wrapper
-    return decorator
-
 # Login Function
-@function_timer()
 async def login_to_asite(email, password):
     headers = {"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"}
     payload = {"emailId": email, "password": password}
@@ -121,7 +90,6 @@ async def login_to_asite(email, password):
         return None
 
 # Function to generate access token
-@function_timer()
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=10, max=60))
 def get_access_token(api_key):
     headers = {"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"}
@@ -142,7 +110,6 @@ def get_access_token(api_key):
         return None
 
 # Initialize COS client
-@function_timer()
 @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=4, max=10))
 def initialize_cos_client():
     try:
@@ -166,7 +133,6 @@ def initialize_cos_client():
         st.error(f"❌ Error initializing COS client: {str(e)}")
         raise
 
-@function_timer()
 async def validate_session():
     url = "https://dmsak.asite.com/api/workspace/workspacelist"
     headers = {'Cookie': f'ASessionID={st.session_state.sessionid}'}
@@ -178,7 +144,6 @@ async def validate_session():
             else:
                 logger.error(f"Session validation failed: {response.status} - {await response.text()}")
                 return False
-
 
 async def refresh_session_if_needed():
     if 'sessionid' not in st.session_state or not st.session_state.sessionid:
@@ -203,7 +168,6 @@ async def refresh_session_if_needed():
     return st.session_state.sessionid
 
 # Fetch Workspace ID
-@function_timer()
 async def GetWorkspaceID():
     await refresh_session_if_needed()
     url = "https://dmsak.asite.com/api/workspace/workspacelist"
@@ -217,7 +181,6 @@ async def GetWorkspaceID():
     st.write(f"Workspace ID: {st.session_state.workspaceid}")
 
 # Fetch Project IDs
-@function_timer()
 async def GetProjectId():
     await refresh_session_if_needed()
     url = f"https://adoddleak.asite.com/commonapi/qaplan/getQualityPlanList;searchCriteria={{'criteria': [{{'field': 'planCreationDate','operator': 6,'values': ['11-Mar-2025']}}], 'projectId': {str(st.session_state.workspaceid)}, 'recordLimit': 1000, 'recordStart': 1}}"
@@ -238,15 +201,18 @@ async def GetProjectId():
         st.session_state.ELIGO_Structure = data['data'][0]['planId']
         st.session_state.Eligo_Tower_F_Finishing = data['data'][1]['planId']
         st.session_state.Eligo_Tower_G_Finishing = data['data'][2]['planId']    
+        st.session_state.Eligo_Tower_H_Finishing = data['data'][4]['planId']
+        st.session_state.Eligo_Non_Tower_Area_Finishing = data['data'][3]['planId']
         st.write(f"ELIGO - Structure Project ID: {st.session_state.ELIGO_Structure}")
         st.write(f"ELIGO - Tower F Finishing Project ID: {st.session_state.Eligo_Tower_F_Finishing}")
         st.write(f"ELIGO - Tower G Finishing Project ID: {st.session_state.Eligo_Tower_G_Finishing}")
+        st.write(f"ELIGO - Tower H Finishing Project ID: {st.session_state.Eligo_Tower_H_Finishing}")
+        st.write(f"ELIGO - Non Tower Area Finishing Project ID: {st.session_state.Eligo_Non_Tower_Area_Finishing}")
     except Exception as e:
         st.error(f"❌ Error fetching Project IDs: {str(e)}")
         logger.error(f"Error fetching Project IDs: {str(e)}")   
 
 # Asynchronous Fetch Function with Retry Logic
-@function_timer()
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 async def fetch_data(session, url, headers, email=None, password=None):
     try:
@@ -275,7 +241,6 @@ async def fetch_data(session, url, headers, email=None, password=None):
         raise
 
 # Fetch All Data with Async
-@function_timer()
 async def GetAllDatas():
     record_limit = 1000
     all_external_data = []
@@ -681,7 +646,6 @@ async def Get_Location():
     return finishing_df, structure_df, external_df, 
 
 # Process individual chunk
-@function_timer()
 def process_chunk(chunk, chunk_idx, dataset_name, location_df):
     logger.info(f"Starting thread for {dataset_name} Chunk {chunk_idx + 1}")
     generated_text = format_chunk_locally(chunk, chunk_idx, len(chunk), dataset_name, location_df)
@@ -689,7 +653,6 @@ def process_chunk(chunk, chunk_idx, dataset_name, location_df):
     return generated_text, chunk_idx
 
 # Process data with manual counting
-@function_timer()
 def process_manually(analysis_df, total, dataset_name, chunk_size=1000, max_workers=4):
     if analysis_df.empty:
         st.warning(f"No completed activities found for {dataset_name}.")
@@ -812,7 +775,6 @@ def process_manually(analysis_df, total, dataset_name, chunk_size=1000, max_work
     return {"towers": aggregated_data, "total": total}
 
 # Local formatting function for manual counting
-@function_timer()
 def format_chunk_locally(chunk, chunk_idx, chunk_size, dataset_name, location_df):
     towers_data = {}
     
@@ -848,7 +810,6 @@ def format_chunk_locally(chunk, chunk_idx, chunk_size, dataset_name, location_df
     return output
 
 
-@function_timer()
 def process_data(df, activity_df, location_df, dataset_name, use_module_hierarchy_for_finishing=False):
     # Filter completed activities
     completed = df[df['statusName'] == 'Completed'].copy()
@@ -1105,7 +1066,8 @@ def process_data(df, activity_df, location_df, dataset_name, use_module_hierarch
 
 
 # Main analysis function
-@function_timer()
+
+
 def AnalyzeStatusManually(email=None, password=None):
     start_time = time.time()
 
@@ -1496,7 +1458,6 @@ def AnalyzeStatusManually(email=None, password=None):
     st.write(f"Total execution time: {end_time - start_time:.2f} seconds")
     
 # COS File Fetching Function
-@function_timer()
 def get_cos_files():
     try:
         cos_client = initialize_cos_client()
@@ -1656,7 +1617,7 @@ if 'ignore_year' not in st.session_state:
 
 
 # Process Excel files
-@function_timer()
+
 def process_file(file_stream, filename):
     try:
         workbook = openpyxl.load_workbook(file_stream)
@@ -1895,7 +1856,6 @@ def process_file(file_stream, filename):
     
     
 #Slab code
-@function_timer()
 def GetSlabReport():
     foundeligo = False
     today = date.today()
@@ -1961,8 +1921,6 @@ def GetSlabReport():
         files = ["Error fetching COS files"]
         st.session_state.slabreport = "No Data Found"
 
-
-@function_timer()
 def generatePrompt(combined_data, slab):
     try:
         st.write(slab)
@@ -2195,7 +2153,7 @@ def generatePrompt(combined_data, slab):
         return combined_data
 
 
-@function_timer()
+
 def extract_and_repair_json(text):
     # Try to find JSON content within the response
     json_match = re.search(r'\{.*\}', text, re.DOTALL)
@@ -2258,7 +2216,6 @@ def extract_and_repair_json(text):
         return None
 
 # Fix the getTotal function to handle the improved JSON structure
-@function_timer()
 def getTotal(ai_data):
     try:
         if isinstance(ai_data, str):
@@ -2316,7 +2273,6 @@ def getTotal(ai_data):
 
    
 # Function to handle activity count display logic
-@function_timer()
 def display_activity_count():
     try:
         if 'ai_response' not in st.session_state or not st.session_state.ai_response:
@@ -2490,7 +2446,6 @@ st.markdown(
 
 
 # Combined function for Initialize All Data and Fetch COS
-@function_timer()
 async def initialize_and_fetch_data(email, password):
     with st.spinner("Starting initialization and data fetching process..."):
         # Step 1: Login
@@ -2684,7 +2639,6 @@ async def initialize_and_fetch_data(email, password):
         return True
 
 
-@function_timer()
 def generate_consolidated_Checklist_excel(ai_data):
     try:
         # Parse AI data if it's a string
@@ -3045,14 +2999,105 @@ def generate_consolidated_Checklist_excel(ai_data):
             adjusted_width = (max_length + 2)
             worksheet.column_dimensions[column].width = adjusted_width
 
+        # Create Sheet 2: Checklist June
+        worksheet2 = workbook.create_sheet(title="Checklist June")
+        current_row = 1
+
+        # Write title
+        worksheet2.cell(row=current_row, column=1).value = "Checklist"
+        worksheet2.cell(row=current_row, column=1).font = header_font
+        current_row += 1
+
+        # Write headers
+        headers = [
+            "Site",
+            "Total of Missing & Open Checklist-Civil",
+            "Total of Missing & Open Checklist-MEP",
+            "TOTAL"
+        ]
+        for col, header in enumerate(headers, start=1):
+            cell = worksheet2.cell(row=current_row, column=col)
+            cell.value = header
+            cell.font = header_font
+            cell.border = border
+            cell.alignment = center_alignment
+        current_row += 1
+
+        # Categorize towers into Civil and MEP
+        def map_category_to_type(category):
+            if category in ["Civil Works", "Structure Works"]:
+                return "Civil"
+            elif category in ["MEP Works", "Interior Finishing Works"]:
+                return "MEP"
+            elif category == "External Development":
+                return "Civil"
+            else:
+                return "Civil"  # Default to Civil if unknown
+
+        # Aggregate open/missing counts by tower and type (Civil/MEP)
+        summary_data = {}
+        for _, row in df.iterrows():
+            tower = row["Tower"]
+            category = row["Category"]
+            open_missing = row["Open/Missing check list"]
+            
+            # Convert tower name to display format (e.g., "T4A" -> "ELigo-Tower 04 A")
+            if "External Development" in category:
+                site_name = f"External Development-{tower}"
+            else:
+                tower_num = tower[1:]  # Remove 'T' prefix
+                if len(tower_num) == 1:
+                    tower_num = f"0{tower_num}"  # Pad single digits (e.g., "T2" -> "02")
+                site_name = f"ELigo-Tower {tower_num}"
+
+            type_ = map_category_to_type(category)
+            
+            if site_name not in summary_data:
+                summary_data[site_name] = {"Civil": 0, "MEP": 0}
+            
+            summary_data[site_name][type_] += open_missing
+
+        logger.info(f"Summary data for Sheet 2: {summary_data}")
+
+        # Write summary data to Sheet 2
+        for site_name, counts in sorted(summary_data.items()):
+            civil_count = counts["Civil"]
+            mep_count = counts["MEP"]
+            total_count = civil_count + mep_count
+            
+            worksheet2.cell(row=current_row, column=1).value = site_name
+            worksheet2.cell(row=current_row, column=2).value = civil_count
+            worksheet2.cell(row=current_row, column=3).value = mep_count
+            worksheet2.cell(row=current_row, column=4).value = total_count
+            
+            for col in range(1, 5):
+                cell = worksheet2.cell(row=current_row, column=col)
+                cell.border = border
+                cell.alignment = center_alignment
+            current_row += 1
+
+        # Adjust column widths for Sheet 2
+        for col in worksheet2.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            worksheet2.column_dimensions[column].width = adjusted_width
+
         # Save the workbook to the BytesIO buffer
         workbook.save(output)
         output.seek(0)
 
+        logger.info("Excel file generated successfully")
         return output
 
     except Exception as e:
-        logger.error(f"Error generating consolidated Excel: {str(e)}")
+        logger.error(f"Error generating consolidated Excel: {str(e)}", exc_info=True)
         st.error(f"❌ Error generating Excel file: {str(e)}")
         return None
 
@@ -3080,7 +3125,6 @@ if st.sidebar.button("Initialize and Fetch Data"):
 
 
 # Combined function to handle both analysis and activity count display
-@function_timer(show_args=True)
 def run_analysis_and_display():
     try:
         st.write("Running status analysis...")
@@ -3132,9 +3176,9 @@ st.sidebar.title("📊 Status Analysis")
 if st.sidebar.button("Analyze and Display Activity Counts"):
     run_analysis_and_display()
 
+st.sidebar.title("📊 Slab Cycle")
 st.session_state.ignore_year = datetime.now().year
 st.session_state.ignore_month = datetime.now().month
-
 
 
 
